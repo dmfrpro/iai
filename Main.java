@@ -1,4 +1,6 @@
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -13,17 +15,193 @@ public class Main {
 }
 
 enum CellType {
-    JACK_SPARROW,
     FREE,
     KRAKEN,
+    ROCK,
+    KRAKEN_ROCK,
     DANGEROUS,
     DAVY_JONES,
-    ROCK,
     TORTUGA,
     CHEST
 }
 
-record Board(CellType[][] cells) {
+class Coordinates {
+    private int x;
+    private int y;
+
+    public Coordinates(int x, int y) {
+        this.x = x;
+        this.y = y;
+    }
+
+    public int getX() {
+        return x;
+    }
+
+    public void setX(int x) {
+        this.x = x;
+    }
+
+    public int getY() {
+        return y;
+    }
+
+    public void setY(int y) {
+        this.y = y;
+    }
+}
+
+class Cells {
+    private final CellType[][] cells;
+
+    private Coordinates jackSparrow;
+
+    private Coordinates davyJones;
+    private Coordinates kraken;
+
+    private final CellType[] davyJonesExclusions = new CellType[0];
+
+    private final CellType[] krakenExclusions = new CellType[]{
+            CellType.DAVY_JONES
+    };
+
+    private final CellType[] rockExclusions = new CellType[]{
+            CellType.DAVY_JONES,
+            CellType.TORTUGA,
+            CellType.CHEST
+    };
+
+    private final CellType[] chestExclusions = new CellType[]{
+            CellType.DAVY_JONES,
+            CellType.KRAKEN,
+            CellType.ROCK,
+            CellType.KRAKEN_ROCK,
+            CellType.DANGEROUS
+    };
+
+    private final CellType[] tortugaExclusions = new CellType[]{
+            CellType.DAVY_JONES,
+            CellType.KRAKEN,
+            CellType.ROCK,
+            CellType.KRAKEN_ROCK,
+            CellType.DANGEROUS,
+            CellType.CHEST
+    };
+
+    private final CellType[] dangerousExclusions = new CellType[]{
+            CellType.DAVY_JONES,
+            CellType.TORTUGA,
+            CellType.CHEST,
+            CellType.ROCK,
+            CellType.KRAKEN_ROCK,
+            CellType.KRAKEN
+    };
+
+    private final CellType[] freeExclusions = new CellType[]{
+            CellType.DAVY_JONES,
+            CellType.TORTUGA,
+            CellType.CHEST,
+            CellType.ROCK
+    };
+
+    private boolean trySetCell(CellType type, int x, int y, CellType... exclusions) {
+        if (getCell(x, y).isPresent() && Arrays.stream(exclusions).noneMatch(cell -> cell == cells[y][x])) {
+            cells[y][x] = type;
+            return true;
+        }
+
+        return false;
+    }
+
+    private void validateAndSetCell(CellType type, int x, int y, CellType... exclusions) {
+        if (!trySetCell(type, x, y, exclusions))
+            throw new IllegalArgumentException("Invalid coordinates of " + type);
+    }
+
+    private void setNeighbors(CellType type, int x, int y, CellType... exclusions) {
+        trySetCell(type, x + 1, y, exclusions);
+        trySetCell(type, x - 1, y, exclusions);
+        trySetCell(type, x, y + 1, exclusions);
+        trySetCell(type, x, y - 1, exclusions);
+    }
+
+    private void setCorners(CellType type, int x, int y, CellType... exclusions) {
+        trySetCell(type, x + 1, y + 1, exclusions);
+        trySetCell(type, x + 1, y - 1, exclusions);
+        trySetCell(type, x - 1, y + 1, exclusions);
+        trySetCell(type, x - 1, y - 1, exclusions);
+    }
+
+    private void setDavyJones(int x, int y) {
+        validateAndSetCell(CellType.DAVY_JONES, x, y, davyJonesExclusions);
+        setNeighbors(CellType.DANGEROUS, x, y, dangerousExclusions);
+        setCorners(CellType.DANGEROUS, x, y, dangerousExclusions);
+
+        davyJones = new Coordinates(x, y);
+    }
+
+    private void setKraken(int x, int y) {
+        kraken = new Coordinates(x, y);
+        validateAndSetCell(CellType.KRAKEN, x, y, krakenExclusions);
+        setNeighbors(CellType.DANGEROUS, x, y, dangerousExclusions);
+    }
+
+    private void setRock(int x, int y) {
+        var type = cells[y][x] == CellType.KRAKEN ? CellType.KRAKEN_ROCK : CellType.ROCK;
+        validateAndSetCell(type, x, y, rockExclusions);
+    }
+
+    private void setChest(int x, int y) {
+        validateAndSetCell(CellType.CHEST, x, y, chestExclusions);
+    }
+
+    private void setTortuga(int x, int y) {
+        validateAndSetCell(CellType.TORTUGA, x, y, tortugaExclusions);
+    }
+
+    private void setJackSparrow(int x, int y) {
+        if (getCell(x, y).isEmpty())
+            throw new IllegalArgumentException("Invalid Jack Sparrow coordinates");
+
+        if (jackSparrow == null) jackSparrow = new Coordinates(x, y);
+
+        jackSparrow.setX(x);
+        jackSparrow.setY(y);
+    }
+
+    public Cells(List<Coordinates> coordinates) {
+        Supplier<CellType[]> rowGenerator = () -> Stream.generate(() -> CellType.FREE)
+                .limit(9)
+                .toArray(CellType[]::new);
+
+        cells = Stream.generate(rowGenerator)
+                .limit(9)
+                .toArray(x -> new CellType[9][9]);
+
+        setJackSparrow(coordinates.get(0).getX(), coordinates.get(0).getY());
+        setDavyJones(coordinates.get(1).getX(), coordinates.get(1).getY());
+        setKraken(coordinates.get(2).getX(), coordinates.get(2).getY());
+        setRock(coordinates.get(3).getX(), coordinates.get(3).getY());
+        setChest(coordinates.get(4).getX(), coordinates.get(4).getY());
+        setTortuga(coordinates.get(5).getX(), coordinates.get(5).getY());
+    }
+
+    void removeKraken() {
+        var type = cells[kraken.getY()][kraken.getX()] == CellType.KRAKEN_ROCK
+                ? CellType.KRAKEN
+                : CellType.FREE;
+
+        validateAndSetCell(type, kraken.getX(), kraken.getY(), freeExclusions);
+        setNeighbors(CellType.FREE, kraken.getX(), kraken.getY(), freeExclusions);
+
+        // Update perception zones of Dave Jones
+        setNeighbors(CellType.DANGEROUS, davyJones.getX(), davyJones.getY(), dangerousExclusions);
+        setCorners(CellType.DANGEROUS, davyJones.getX(), davyJones.getY(), dangerousExclusions);
+    }
+
+    CellType[][] getCells() {
+        return cells;
+    }
 
     Optional<CellType> getCell(int x, int y) {
         if (y < 0 || y >= cells.length || x < 0 || x >= cells.length)
@@ -51,155 +229,37 @@ record Board(CellType[][] cells) {
                 .map(Optional::get)
                 .collect(Collectors.toSet());
     }
-
-    @Override
-    public String toString() {
-        return "";
-    }
 }
 
-record Coordinates(int x, int y) {
-}
+class InputHelper {
+    private List<String> inputData;
 
-class BoardGenerator {
-    private final int xDimension;
-    private final int yDimension;
-
-    private CellType[][] cells;
-
-    private final CellType[] jackSparrowExclusions = new CellType[]{
-            CellType.JACK_SPARROW,
-            CellType.DAVY_JONES,
-            CellType.KRAKEN,
-            CellType.ROCK,
-            CellType.CHEST,
-            CellType.DANGEROUS
-    };
-
-    private final CellType[] davyJonesExclusions = new CellType[]{
-            CellType.JACK_SPARROW,
-            CellType.DAVY_JONES,
-            CellType.KRAKEN,
-            CellType.ROCK,
-            CellType.CHEST,
-            CellType.TORTUGA
-    };
-
-    private final CellType[] krakenExclusions = new CellType[]{
-            CellType.JACK_SPARROW,
-            CellType.DAVY_JONES,
-            CellType.CHEST,
-            CellType.TORTUGA,
-    };
-
-    private final CellType[] rockExclusions = new CellType[]{
-            CellType.JACK_SPARROW,
-            CellType.DAVY_JONES,
-            CellType.TORTUGA,
-            CellType.CHEST
-    };
-
-    private final CellType[] chestExclusions = new CellType[]{
-            CellType.JACK_SPARROW,
-            CellType.DAVY_JONES,
-            CellType.KRAKEN,
-            CellType.DANGEROUS,
-            CellType.ROCK
-    };
-
-    private final CellType[] tortugaExclusions = new CellType[]{
-            CellType.DAVY_JONES,
-            CellType.CHEST,
-            CellType.KRAKEN,
-            CellType.DANGEROUS,
-            CellType.ROCK
-    };
-
-    public BoardGenerator(int xDimension, int yDimension) {
-        this.xDimension = xDimension;
-        this.yDimension = yDimension;
-    }
-
-    BoardGenerator emptyBoard() {
-        Supplier<CellType[]> rowGenerator = () -> Stream.generate(() -> CellType.FREE)
-                .limit(xDimension)
-                .toArray(CellType[]::new);
-
-        cells = Stream.generate(rowGenerator)
-                .limit(yDimension)
-                .toArray(x -> new CellType[yDimension][xDimension]);
-
-        return this;
-    }
-
-    private void tryAppendCell(CellType[][] cells, CellType type, int x, int y, CellType... exclusions) {
-        if (y >= 0 && y < cells.length && x >= 0 && x < cells.length)
-            if (Arrays.stream(exclusions).noneMatch(cell -> cell == cells[y][x]))
-                cells[y][x] = type;
-    }
-
-    private void appendDangerousAdjacentCells(CellType[][] cells, int x, int y) {
-        tryAppendCell(cells, CellType.DANGEROUS, x + 1, y);
-        tryAppendCell(cells, CellType.DANGEROUS, x - 1, y);
-        tryAppendCell(cells, CellType.DANGEROUS, x, y + 1);
-        tryAppendCell(cells, CellType.DANGEROUS, x, y - 1);
-    }
-
-    private void appendDangerousCornerCells(CellType[][] cells, int x, int y) {
-        tryAppendCell(cells, CellType.DANGEROUS, x + 1, y + 1);
-        tryAppendCell(cells, CellType.DANGEROUS, x - 1, y + 1);
-        tryAppendCell(cells, CellType.DANGEROUS, x + 1, y - 1);
-        tryAppendCell(cells, CellType.DANGEROUS, x - 1, y - 1);
-    }
-
-    BoardGenerator appendChest(int x, int y) {
-        tryAppendCell(cells, CellType.CHEST, x, y);
-        return this;
-    }
-
-    BoardGenerator appendTortuga(int x, int y) {
-        tryAppendCell(cells, CellType.TORTUGA, x, y);
-        return this;
-    }
-
-    BoardGenerator appendRock(int x, int y) {
-        tryAppendCell(cells, CellType.ROCK, x, y);
-        return this;
-    }
-
-    BoardGenerator appendKraken(int x, int y) {
-        tryAppendCell(cells, CellType.KRAKEN, x, y);
-        appendDangerousAdjacentCells(cells, x, y);
-        return this;
-    }
-
-    BoardGenerator appendDavyJones(int x, int y) {
-        tryAppendCell(cells, CellType.DAVY_JONES, x, y);
-        appendDangerousAdjacentCells(cells, x, y);
-        appendDangerousCornerCells(cells, x, y);
-        return this;
-    }
-
-    CellType[][] buildBoard() {
-        return cells;
-    }
-}
-
-class InputReader {
-    private final List<String> inputData;
-    private final int xDimension;
-    private final int yDimension;
-
-    public InputReader(Path inputPath, int xDimension, int yDimension) throws IOException {
-        this.xDimension = xDimension;
-        this.yDimension = yDimension;
-
-        try(var stream = Files.lines(inputPath)) {
+    private void tryInitStreams(Path inputPath) {
+        try (var stream = Files.lines(inputPath)) {
             this.inputData = stream.toList();
 
-            if (inputData.size() != 2)
-                throw new IOException("Number of input lines is less than 2");
+            if (inputData.size() < 2)
+                throw new IOException("Number of input file lines is < 2");
+        } catch (IOException ignored) {
+            try (var console = new BufferedReader(new InputStreamReader(System.in))) {
+                System.out.println("Enter the input data:");
+                inputData = console.lines().toList();
+
+                if (inputData.size() < 2)
+                    throw new IOException("Number of input console lines is < 2");
+            } catch (IOException e1) {
+                System.out.printf(
+                        "Please either update the data in %s or type correct input in the console\n",
+                        inputPath
+                );
+
+                tryInitStreams(inputPath);
+            }
         }
+    }
+
+    public InputHelper(Path inputPath) {
+        tryInitStreams(inputPath);
     }
 
     List<Coordinates> readCoordinates() throws IOException {
@@ -209,22 +269,12 @@ class InputReader {
                     var split = x.replaceAll("[\\[\\]]+", "").split(",");
                     return new Coordinates(Integer.parseInt(split[0]), Integer.parseInt(split[1]));
                 })
-                .filter(coordinate -> coordinate.x() >= 0 && coordinate.x() < xDimension)
-                .filter(coordinate -> coordinate.y() >= 0 && coordinate.y() < yDimension)
+                .filter(coordinate -> coordinate.getX() >= 0 && coordinate.getX() < 9)
+                .filter(coordinate -> coordinate.getY() >= 0 && coordinate.getY() < 9)
                 .toList();
 
         if (coordinates.size() != 6)
             throw new IOException("Invalid coordinates");
-
-        var distinctCoordinatesSize = new HashSet<>(coordinates).size();
-
-        if (distinctCoordinatesSize < 5)
-            throw new IOException("Invalid coordinates");
-
-        if (distinctCoordinatesSize == 5) {
-            if (!coordinates.get(2).equals(coordinates.get(3)))
-                throw new IOException("Invalid coordinates");
-        }
 
         return coordinates;
     }
