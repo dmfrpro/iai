@@ -12,10 +12,10 @@ import java.util.stream.Stream;
 public class Main {
     public static void main(String[] args) {
         try {
-            var inputHelper = new InputHelper(Path.of("input.txt"));
-            var coordinates = inputHelper.getPositions();
-            var scenario = inputHelper.getScenario();
-            var cells = new Cells(coordinates);
+            InputHelper.tryInitStreams(Path.of("input.txt"));
+            var positions = InputHelper.getPositions();
+            var scenario = InputHelper.getScenario();
+            var cells = new Cells(positions);
 
             System.out.println(cells);
             cells.removeKraken();
@@ -29,7 +29,7 @@ public class Main {
 }
 
 enum CellType {
-    FREE("."),
+    FREE("_"),
     KRAKEN("k"),
     ROCK("R"),
     KRAKEN_ROCK("K"),
@@ -63,6 +63,11 @@ record Pos(int x, int y) {
                         new Pos(x, y + 1), new Pos(x, y - 1),
                         new Pos(x + 1, y), new Pos(x - 1, y)
                 );
+    }
+
+    @Override
+    public String toString() {
+        return String.format("[%d,%d]", y, x);
     }
 }
 
@@ -198,47 +203,52 @@ class Cells {
                 .toArray(x -> new CellType[9][9]);
     }
 
-    private Pos getRandomCoordinates() {
-        return new Pos(random.nextInt(0, 9), random.nextInt(0, 9));
+    private Pos getRandomPos() {
+        var result = new Pos(random.nextInt(0, 9), random.nextInt(0, 9));
+        if (result.x() != 0 && result.y() != 0) return result;
+        else return getRandomPos();
     }
 
-    public Cells(List<Pos> coordinates) {
+    public Cells(List<Pos> pos) {
         cells = emptyCells();
 
         var generationResult = Stream.of(
-                setDavyJones(coordinates.get(1).x(), coordinates.get(1).y()),
-                setKraken(coordinates.get(2).x(), coordinates.get(2).y()),
-                setRock(coordinates.get(3).x(), coordinates.get(3).y()),
-                setChest(coordinates.get(4).x(), coordinates.get(4).y()),
-                setTortuga(coordinates.get(5).x(), coordinates.get(5).y())
+                setDavyJones(pos.get(1).x(), pos.get(1).y()),
+                setKraken(pos.get(2).x(), pos.get(2).y()),
+                setRock(pos.get(3).x(), pos.get(3).y()),
+                setChest(pos.get(4).x(), pos.get(4).y()),
+                setTortuga(pos.get(5).x(), pos.get(5).y()),
+                setJackSparrow(pos.get(0).x(),pos.get(0).y())
         ).allMatch(result -> result);
 
         if (!generationResult)
-            throw new IllegalArgumentException("Invalid coordinates");
+            throw new IllegalArgumentException("Invalid pos");
     }
 
     public Cells() {
         cells = emptyCells();
 
-        var coordinates = getRandomCoordinates();
+        setJackSparrow(0, 0);
 
-        while (!setDavyJones(coordinates.x(), coordinates.y()))
-            coordinates = getRandomCoordinates();
+        var pos = getRandomPos();
+        while (!setDavyJones(pos.x(), pos.y()))
+            pos = getRandomPos();
 
-        while (!setKraken(coordinates.x(), coordinates.y()))
-            coordinates = getRandomCoordinates();
+        pos = getRandomPos();
+        while (!setKraken(pos.x(), pos.y()))
+            pos = getRandomPos();
 
-        while (!setRock(coordinates.x(), coordinates.y()))
-            coordinates = getRandomCoordinates();
+        pos = getRandomPos();
+        while (!setRock(pos.x(), pos.y()))
+            pos = getRandomPos();
 
-        while (!setChest(coordinates.x(), coordinates.y()))
-            coordinates = getRandomCoordinates();
+        pos = getRandomPos();
+        while (!setChest(pos.x(), pos.y()))
+            pos = getRandomPos();
 
-        while (!setTortuga(coordinates.x(), coordinates.y()))
-            coordinates = getRandomCoordinates();
-
-        while (!setJackSparrow(coordinates.x(), coordinates.y()))
-            coordinates = getRandomCoordinates();
+        pos = getRandomPos();
+        while (!setTortuga(pos.x(), pos.y()))
+            pos = getRandomPos();
     }
 
     void removeKraken() {
@@ -285,11 +295,11 @@ class Cells {
 }
 
 class InputHelper {
-    private List<String> inputData;
-    private List<Pos> positions;
-    private int scenario;
+    private static List<String> inputData;
+    private static List<Pos> positions;
+    private static int scenario;
 
-    private void tryInitStreams(Path inputPath) {
+    static void tryInitStreams(Path inputPath) {
         try {
             inputData = Files.readAllLines(inputPath);
 
@@ -319,36 +329,32 @@ class InputHelper {
         }
     }
 
-    public InputHelper(Path inputFilePath) {
-        tryInitStreams(inputFilePath);
-    }
-
-    private void readPositions() throws IOException {
+    private static void readPositions() throws IOException {
         positions = Arrays.stream(inputData.get(0).split("\\s+"))
                 .filter(x -> x.matches("\\[\\d,\\d]"))
                 .map(x -> {
                     var split = x.replaceAll("[\\[\\]]+", "").split(",");
                     return new Pos(Integer.parseInt(split[0]), Integer.parseInt(split[1]));
                 })
-                .filter(coordinate -> coordinate.x() >= 0 && coordinate.x() < 9)
-                .filter(coordinate -> coordinate.y() >= 0 && coordinate.y() < 9)
+                .filter(p -> p.x() >= 0 && p.x() < 9)
+                .filter(p -> p.y() >= 0 && p.y() < 9)
                 .toList();
 
         if (positions.size() != 6)
-            throw new IOException("Invalid coordinates");
+            throw new IOException("Invalid positions");
     }
 
-    private void readScenario() throws IOException {
+    private static void readScenario() throws IOException {
         scenario = Integer.parseInt(inputData.get(1));
         if (scenario != 1 && scenario != 2)
             throw new IOException("Invalid scenario");
     }
 
-    public List<Pos> getPositions() {
+    static List<Pos> getPositions() {
         return positions;
     }
 
-    public int getScenario() {
+    static int getScenario() {
         return scenario;
     }
 }
