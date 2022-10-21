@@ -3,12 +3,10 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 public class Main {
@@ -18,9 +16,12 @@ public class Main {
             var coordinates = inputHelper.getCoordinates();
             var scenario = inputHelper.getScenario();
             var cells = new Cells(coordinates);
-            cells.removeKraken();
 
-            System.out.println();
+            System.out.println(cells);
+            cells.removeKraken();
+            System.out.println(cells);
+            System.out.println(new Cells());
+
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -28,47 +29,35 @@ public class Main {
 }
 
 enum CellType {
-    FREE,
-    KRAKEN,
-    ROCK,
-    KRAKEN_ROCK,
-    DANGEROUS,
-    DAVY_JONES,
-    TORTUGA,
-    CHEST
+    FREE("."),
+    KRAKEN("k"),
+    ROCK("R"),
+    KRAKEN_ROCK("K"),
+    DANGEROUS("#"),
+    DAVY_JONES("D"),
+    TORTUGA("T"),
+    CHEST("C");
+
+    private final String icon;
+
+    CellType(String icon) {
+        this.icon = icon;
+    }
+
+    @Override
+    public String toString() {
+        return icon;
+    }
 }
 
-class Coordinates {
-    private int x;
-    private int y;
-
-    public Coordinates(int x, int y) {
-        this.x = x;
-        this.y = y;
-    }
-
-    public int getX() {
-        return x;
-    }
-
-    public void setX(int x) {
-        this.x = x;
-    }
-
-    public int getY() {
-        return y;
-    }
-
-    public void setY(int y) {
-        this.y = y;
-    }
+record Coordinates(int x, int y) {
 }
 
 class Cells {
+    private static final Random random = new Random();
+
     private final CellType[][] cells;
-
     private Coordinates jackSparrow;
-
     private Coordinates davyJones;
     private Coordinates kraken;
 
@@ -122,13 +111,7 @@ class Cells {
             cells[y][x] = type;
             return true;
         }
-
         return false;
-    }
-
-    private void validateAndSetCell(CellType type, int x, int y, CellType... exclusions) {
-        if (!trySetCell(type, x, y, exclusions))
-            throw new IllegalArgumentException("Invalid coordinates of " + type);
     }
 
     private void setNeighbors(CellType type, int x, int y, CellType... exclusions) {
@@ -145,77 +128,117 @@ class Cells {
         trySetCell(CellType.DANGEROUS, x - 1, y - 1, dangerousExclusions);
     }
 
-    private void setDavyJones(int x, int y) {
-        validateAndSetCell(CellType.DAVY_JONES, x, y, davyJonesExclusions);
-        setNeighbors(CellType.DANGEROUS, x, y, dangerousExclusions);
-        setDangerousCorners(x, y);
+    private boolean setDavyJones(int x, int y) {
+        if (trySetCell(CellType.DAVY_JONES, x, y, davyJonesExclusions)) {
+            setNeighbors(CellType.DANGEROUS, x, y, dangerousExclusions);
+            setDangerousCorners(x, y);
 
-        davyJones = new Coordinates(x, y);
+            davyJones = new Coordinates(x, y);
+            return true;
+        }
+        return false;
     }
 
-    private void setKraken(int x, int y) {
-        kraken = new Coordinates(x, y);
-        validateAndSetCell(CellType.KRAKEN, x, y, krakenExclusions);
-        setNeighbors(CellType.DANGEROUS, x, y, dangerousExclusions);
+    private boolean setKraken(int x, int y) {
+        if (trySetCell(CellType.KRAKEN, x, y, krakenExclusions)) {
+            kraken = new Coordinates(x, y);
+            setNeighbors(CellType.DANGEROUS, x, y, dangerousExclusions);
+            return true;
+        }
+        return false;
     }
 
-    private void setRock(int x, int y) {
+    private boolean setRock(int x, int y) {
         var type = cells[y][x] == CellType.KRAKEN ? CellType.KRAKEN_ROCK : CellType.ROCK;
-        validateAndSetCell(type, x, y, rockExclusions);
+        return trySetCell(type, x, y, rockExclusions);
     }
 
-    private void setChest(int x, int y) {
-        validateAndSetCell(CellType.CHEST, x, y, chestExclusions);
+    private boolean setChest(int x, int y) {
+        return trySetCell(CellType.CHEST, x, y, chestExclusions);
     }
 
-    private void setTortuga(int x, int y) {
-        validateAndSetCell(CellType.TORTUGA, x, y, tortugaExclusions);
+    private boolean setTortuga(int x, int y) {
+        return trySetCell(CellType.TORTUGA, x, y, tortugaExclusions);
     }
 
-    private void setJackSparrow(int x, int y) {
+    private boolean setJackSparrow(int x, int y) {
         if (getCell(x, y).isEmpty())
-            throw new IllegalArgumentException("Invalid Jack Sparrow coordinates");
+            return false;
         else {
             var currentCell = getCell(x, y).get();
-            if (Stream.of(CellType.KRAKEN, CellType.ROCK, CellType.DAVY_JONES).anyMatch(cell -> cell == currentCell))
-                throw new IllegalArgumentException("Invalid Jack Sparrow coordinates");
+            if (Stream.of(CellType.KRAKEN, CellType.ROCK, CellType.DAVY_JONES).noneMatch(cell -> cell == currentCell)) {
+                if (jackSparrow == null) jackSparrow = new Coordinates(x, y);
+                return true;
+            }
         }
 
-        if (jackSparrow == null) jackSparrow = new Coordinates(x, y);
-
-        jackSparrow.setX(x);
-        jackSparrow.setY(y);
+        return false;
     }
 
-    public Cells(List<Coordinates> coordinates) {
+    private CellType[][] emptyCells() {
         Supplier<CellType[]> rowGenerator = () -> Stream.generate(() -> CellType.FREE)
                 .limit(9)
                 .toArray(CellType[]::new);
 
-        cells = Stream.generate(rowGenerator)
+        return Stream.generate(rowGenerator)
                 .limit(9)
                 .toArray(x -> new CellType[9][9]);
+    }
 
-        setDavyJones(coordinates.get(1).getX(), coordinates.get(1).getY());
-        setKraken(coordinates.get(2).getX(), coordinates.get(2).getY());
-        setRock(coordinates.get(3).getX(), coordinates.get(3).getY());
-        setChest(coordinates.get(4).getX(), coordinates.get(4).getY());
-        setTortuga(coordinates.get(5).getX(), coordinates.get(5).getY());
+    private Coordinates getRandomCoordinates() {
+        return new Coordinates(random.nextInt(0, 9), random.nextInt(0, 9));
+    }
 
-        setJackSparrow(coordinates.get(0).getX(), coordinates.get(0).getY());
+    public Cells(List<Coordinates> coordinates) {
+        cells = emptyCells();
+
+        var generationResult = Stream.of(
+                setDavyJones(coordinates.get(1).x(), coordinates.get(1).y()),
+                setKraken(coordinates.get(2).x(), coordinates.get(2).y()),
+                setRock(coordinates.get(3).x(), coordinates.get(3).y()),
+                setChest(coordinates.get(4).x(), coordinates.get(4).y()),
+                setTortuga(coordinates.get(5).x(), coordinates.get(5).y())
+        ).allMatch(result -> result);
+
+        if (!generationResult)
+            throw new IllegalArgumentException("Invalid coordinates");
+    }
+
+    public Cells() {
+        cells = emptyCells();
+
+        var coordinates = getRandomCoordinates();
+
+        while (!setDavyJones(coordinates.x(), coordinates.y()))
+            coordinates = getRandomCoordinates();
+
+        while (!setKraken(coordinates.x(), coordinates.y()))
+            coordinates = getRandomCoordinates();
+
+        while (!setRock(coordinates.x(), coordinates.y()))
+            coordinates = getRandomCoordinates();
+
+        while (!setChest(coordinates.x(), coordinates.y()))
+            coordinates = getRandomCoordinates();
+
+        while (!setTortuga(coordinates.x(), coordinates.y()))
+            coordinates = getRandomCoordinates();
+
+        while (!setJackSparrow(coordinates.x(), coordinates.y()))
+            coordinates = getRandomCoordinates();
     }
 
     void removeKraken() {
-        var type = cells[kraken.getY()][kraken.getX()] == CellType.KRAKEN_ROCK
+        var type = cells[kraken.y()][kraken.x()] == CellType.KRAKEN_ROCK
                 ? CellType.ROCK
                 : CellType.FREE;
 
-        validateAndSetCell(type, kraken.getX(), kraken.getY(), freeExclusions);
-        setNeighbors(CellType.FREE, kraken.getX(), kraken.getY(), freeExclusions);
+        trySetCell(type, kraken.x(), kraken.y(), freeExclusions);
+        setNeighbors(CellType.FREE, kraken.x(), kraken.y(), freeExclusions);
 
         // Update perception zones of Davy Jones
-        setNeighbors(CellType.DANGEROUS, davyJones.getX(), davyJones.getY(), dangerousExclusions);
-        setDangerousCorners(davyJones.getX(), davyJones.getY());
+        setNeighbors(CellType.DANGEROUS, davyJones.x(), davyJones.y(), dangerousExclusions);
+        setDangerousCorners(davyJones.x(), davyJones.y());
     }
 
     Optional<CellType> getCell(int x, int y) {
@@ -243,6 +266,28 @@ class Cells {
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .collect(Collectors.toSet());
+    }
+
+    @Override
+    public String toString() {
+        var indexesRow = IntStream.iterate(0, i -> i + 1)
+                .limit(9)
+                .mapToObj(String::valueOf)
+                .collect(Collectors.joining(" "));
+
+        var builder = new StringBuilder("  ").append(indexesRow).append('\n');
+
+        IntStream.iterate(0, i -> i + 1)
+                .limit(9)
+                .forEach(i -> {
+                    builder.append(i).append(' ');
+                    var row = Arrays.stream(cells[i])
+                            .map(Object::toString)
+                            .collect(Collectors.joining(" "));
+                    builder.append(row).append('\n');
+                });
+
+        return builder.toString();
     }
 }
 
@@ -292,8 +337,8 @@ class InputHelper {
                     var split = x.replaceAll("[\\[\\]]+", "").split(",");
                     return new Coordinates(Integer.parseInt(split[0]), Integer.parseInt(split[1]));
                 })
-                .filter(coordinate -> coordinate.getX() >= 0 && coordinate.getX() < 9)
-                .filter(coordinate -> coordinate.getY() >= 0 && coordinate.getY() < 9)
+                .filter(coordinate -> coordinate.x() >= 0 && coordinate.x() < 9)
+                .filter(coordinate -> coordinate.y() >= 0 && coordinate.y() < 9)
                 .toList();
 
         if (coordinates.size() != 6)
