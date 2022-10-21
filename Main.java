@@ -18,21 +18,19 @@ public class Main {
 
             OutputHelper.printWin(
                     Path.of("outputAStar.txt"),
-                    List.of(new Pos(0, 0)),
-                    cells.toString(),
+                    new Snapshot(List.of(new Pos(0, 0)), cells.toString()),
                     15
             );
 
             cells.removeKraken();
             OutputHelper.printWin(
                     Path.of("outputBacktracking.txt"),
-                    List.of(new Pos(0, 0)),
-                    cells.toString(),
+                    new Snapshot(List.of(new Pos(0, 0)), cells.toString()),
                     14
             );
 
-            OutputHelper.printWin(List.of(new Pos(0, 0)), new Cells().toString(), 1);
-            OutputHelper.printWin(List.of(new Pos(0, 0)), new Cells().toString(), 2);
+            OutputHelper.printWin(new Snapshot(List.of(new Pos(0, 0)), cells.toString()), 1);
+            OutputHelper.printWin(new Snapshot(List.of(new Pos(0, 0)), cells.toString()), 2);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -82,6 +80,17 @@ record Pos(int x, int y) {
     @Override
     public String toString() {
         return String.format("[%d,%d]", y, x);
+    }
+}
+
+record Snapshot(List<Pos> shortestPath, String cells) {
+    @Override
+    public String toString() {
+        var shortestPathString = shortestPath.stream()
+                .map(Pos::toString)
+                .collect(Collectors.joining(" "));
+
+        return String.format("%d\n%s\n%s", shortestPath.size(), shortestPathString, cells);
     }
 }
 
@@ -380,22 +389,14 @@ class OutputHelper {
         System.out.println("Lose");
     }
 
-    static void printWin(Path outputPath, List<Pos> shortestPath, String matrix, long timeMillis) throws IOException {
-        var shortestPathString = shortestPath.stream()
-                .map(Pos::toString)
-                .collect(Collectors.joining(" "));
-
+    static void printWin(Path outputPath, Snapshot snapshot, long timeMillis) throws IOException {
         Files.writeString(
                 outputPath,
-                String.format("Win\n%d\n%s\n%s%d ms\n", shortestPath.size(), shortestPathString, matrix, timeMillis)
+                String.format("Win\n%s%d ms\n", snapshot, timeMillis)
         );
     }
 
-    static void printWin(List<Pos> shortestPath, String matrix, long timeMillis) {
-        var shortestPathString = shortestPath.stream()
-                .map(Pos::toString)
-                .collect(Collectors.joining(" "));
-
-        System.out.printf("Win\n%d\n%s\n%s%d ms\n", shortestPath.size(), shortestPathString, matrix, timeMillis);
+    static void printWin(Snapshot snapshot, long timeMillis) {
+        System.out.printf("Win\n%s%d ms\n", snapshot, timeMillis);
     }
 }
