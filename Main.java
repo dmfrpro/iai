@@ -3,14 +3,27 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Main {
     public static void main(String[] args) {
+        try {
+            var inputHelper = new InputHelper(Path.of("input.txt"));
+            var coordinates = inputHelper.getCoordinates();
+            var scenario = inputHelper.getScenario();
+            var cells = new Cells(coordinates);
+            cells.removeKraken();
 
+            System.out.println();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
 
@@ -162,6 +175,11 @@ class Cells {
     private void setJackSparrow(int x, int y) {
         if (getCell(x, y).isEmpty())
             throw new IllegalArgumentException("Invalid Jack Sparrow coordinates");
+        else {
+            var currentCell = getCell(x, y).get();
+            if (Stream.of(CellType.KRAKEN, CellType.ROCK, CellType.DAVY_JONES).anyMatch(cell -> cell == currentCell))
+                throw new IllegalArgumentException("Invalid Jack Sparrow coordinates");
+        }
 
         if (jackSparrow == null) jackSparrow = new Coordinates(x, y);
 
@@ -178,17 +196,18 @@ class Cells {
                 .limit(9)
                 .toArray(x -> new CellType[9][9]);
 
-        setJackSparrow(coordinates.get(0).getX(), coordinates.get(0).getY());
         setDavyJones(coordinates.get(1).getX(), coordinates.get(1).getY());
         setKraken(coordinates.get(2).getX(), coordinates.get(2).getY());
         setRock(coordinates.get(3).getX(), coordinates.get(3).getY());
         setChest(coordinates.get(4).getX(), coordinates.get(4).getY());
         setTortuga(coordinates.get(5).getX(), coordinates.get(5).getY());
+
+        setJackSparrow(coordinates.get(0).getX(), coordinates.get(0).getY());
     }
 
     void removeKraken() {
         var type = cells[kraken.getY()][kraken.getX()] == CellType.KRAKEN_ROCK
-                ? CellType.KRAKEN
+                ? CellType.ROCK
                 : CellType.FREE;
 
         validateAndSetCell(type, kraken.getX(), kraken.getY(), freeExclusions);
@@ -197,10 +216,6 @@ class Cells {
         // Update perception zones of Dave Jones
         setNeighbors(CellType.DANGEROUS, davyJones.getX(), davyJones.getY(), dangerousExclusions);
         setCorners(CellType.DANGEROUS, davyJones.getX(), davyJones.getY(), dangerousExclusions);
-    }
-
-    CellType[][] getCells() {
-        return cells;
     }
 
     Optional<CellType> getCell(int x, int y) {
@@ -233,37 +248,45 @@ class Cells {
 
 class InputHelper {
     private List<String> inputData;
+    private List<Coordinates> coordinates;
+    private int scenario;
 
     private void tryInitStreams(Path inputPath) {
         try (var stream = Files.lines(inputPath)) {
-            this.inputData = stream.toList();
+            inputData = stream.toList();
 
             if (inputData.size() < 2)
                 throw new IOException("Number of input file lines is < 2");
+
+            readCoordinates();
+            readScenario();
         } catch (IOException ignored) {
             try (var console = new BufferedReader(new InputStreamReader(System.in))) {
                 System.out.println("Enter the input data:");
-                inputData = console.lines().toList();
+                inputData = Stream.of(console.readLine(), console.readLine()).toList();
 
                 if (inputData.size() < 2)
                     throw new IOException("Number of input console lines is < 2");
-            } catch (IOException e1) {
+
+                readCoordinates();
+                readScenario();
+            } catch (IOException e) {
                 System.out.printf(
                         "Please either update the data in %s or type correct input in the console\n",
                         inputPath
                 );
 
-                tryInitStreams(inputPath);
+//                tryInitStreams(inputPath);
             }
         }
     }
 
-    public InputHelper(Path inputPath) {
-        tryInitStreams(inputPath);
+    public InputHelper(Path inputFilePath) {
+        tryInitStreams(inputFilePath);
     }
 
-    List<Coordinates> readCoordinates() throws IOException {
-        var coordinates = Arrays.stream(inputData.get(0).split("\\s+"))
+    private void readCoordinates() throws IOException {
+        coordinates = Arrays.stream(inputData.get(0).split("\\s+"))
                 .filter(x -> x.matches("\\[\\d,\\d]"))
                 .map(x -> {
                     var split = x.replaceAll("[\\[\\]]+", "").split(",");
@@ -275,14 +298,19 @@ class InputHelper {
 
         if (coordinates.size() != 6)
             throw new IOException("Invalid coordinates");
+    }
 
+    private void readScenario() throws IOException {
+        var scenario = Integer.parseInt(inputData.get(1));
+        if (scenario != 1 && scenario != 2)
+            throw new IOException("Invalid scenario");
+    }
+
+    public List<Coordinates> getCoordinates() {
         return coordinates;
     }
 
-    int readScenario() throws IOException {
-        var scenario = Integer.parseInt(inputData.get(1));
-        if (scenario == 1 || scenario == 2)
-            return scenario;
-        throw new IOException("Invalid scenario");
+    public int getScenario() {
+        return scenario;
     }
 }
