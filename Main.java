@@ -13,7 +13,7 @@ public class Main {
     public static void main(String[] args) {
         try {
             var inputHelper = new InputHelper(Path.of("input.txt"));
-            var coordinates = inputHelper.getCoordinates();
+            var coordinates = inputHelper.getPositions();
             var scenario = inputHelper.getScenario();
             var cells = new Cells(coordinates);
 
@@ -50,16 +50,29 @@ enum CellType {
     }
 }
 
-record Coordinates(int x, int y) {
+record Pos(int x, int y) {
+    Set<Pos> neighbors(int x, int y) {
+        return Set.of(
+                        new Pos(x, y + 1), new Pos(x, y - 1),
+                        new Pos(x + 1, y), new Pos(x - 1, y)
+                );
+    }
+
+    Set<Pos> corners(int x, int y) {
+        return Set.of(
+                        new Pos(x, y + 1), new Pos(x, y - 1),
+                        new Pos(x + 1, y), new Pos(x - 1, y)
+                );
+    }
 }
 
 class Cells {
     private static final Random random = new Random();
 
     private final CellType[][] cells;
-    private Coordinates jackSparrow;
-    private Coordinates davyJones;
-    private Coordinates kraken;
+    private Pos jackSparrow;
+    private Pos davyJones;
+    private Pos kraken;
 
     private final CellType[] davyJonesExclusions = new CellType[0];
 
@@ -133,7 +146,7 @@ class Cells {
             setNeighbors(CellType.DANGEROUS, x, y, dangerousExclusions);
             setDangerousCorners(x, y);
 
-            davyJones = new Coordinates(x, y);
+            davyJones = new Pos(x, y);
             return true;
         }
         return false;
@@ -141,7 +154,7 @@ class Cells {
 
     private boolean setKraken(int x, int y) {
         if (trySetCell(CellType.KRAKEN, x, y, krakenExclusions)) {
-            kraken = new Coordinates(x, y);
+            kraken = new Pos(x, y);
             setNeighbors(CellType.DANGEROUS, x, y, dangerousExclusions);
             return true;
         }
@@ -167,7 +180,7 @@ class Cells {
         else {
             var currentCell = getCell(x, y).get();
             if (Stream.of(CellType.KRAKEN, CellType.ROCK, CellType.DAVY_JONES).noneMatch(cell -> cell == currentCell)) {
-                if (jackSparrow == null) jackSparrow = new Coordinates(x, y);
+                if (jackSparrow == null) jackSparrow = new Pos(x, y);
                 return true;
             }
         }
@@ -185,11 +198,11 @@ class Cells {
                 .toArray(x -> new CellType[9][9]);
     }
 
-    private Coordinates getRandomCoordinates() {
-        return new Coordinates(random.nextInt(0, 9), random.nextInt(0, 9));
+    private Pos getRandomCoordinates() {
+        return new Pos(random.nextInt(0, 9), random.nextInt(0, 9));
     }
 
-    public Cells(List<Coordinates> coordinates) {
+    public Cells(List<Pos> coordinates) {
         cells = emptyCells();
 
         var generationResult = Stream.of(
@@ -248,26 +261,6 @@ class Cells {
         return Optional.ofNullable(cells[y][x]);
     }
 
-    Set<CellType> getAdjacentCells(int x, int y) {
-        return Stream.of(
-                        getCell(x, y + 1), getCell(x, y - 1),
-                        getCell(x + 1, y), getCell(x - 1, y)
-                )
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .collect(Collectors.toSet());
-    }
-
-    Set<CellType> getCornerCells(int x, int y) {
-        return Stream.of(
-                        getCell(x + 1, y + 1), getCell(x - 1, y + 1),
-                        getCell(x + 1, y - 1), getCell(x - 1, y - 1)
-                )
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .collect(Collectors.toSet());
-    }
-
     @Override
     public String toString() {
         var indexesRow = IntStream.iterate(0, i -> i + 1)
@@ -293,7 +286,7 @@ class Cells {
 
 class InputHelper {
     private List<String> inputData;
-    private List<Coordinates> coordinates;
+    private List<Pos> positions;
     private int scenario;
 
     private void tryInitStreams(Path inputPath) {
@@ -303,7 +296,7 @@ class InputHelper {
             if (inputData.size() < 2)
                 throw new IOException("Number of input file lines is < 2");
 
-            readCoordinates();
+            readPositions();
             readScenario();
         } catch (IOException ignored) {
             try (var console = new BufferedReader(new InputStreamReader(System.in))) {
@@ -313,7 +306,7 @@ class InputHelper {
                 if (inputData.size() < 2)
                     throw new IOException("Number of input console lines is < 2");
 
-                readCoordinates();
+                readPositions();
                 readScenario();
             } catch (IOException e) {
                 System.out.printf(
@@ -330,29 +323,29 @@ class InputHelper {
         tryInitStreams(inputFilePath);
     }
 
-    private void readCoordinates() throws IOException {
-        coordinates = Arrays.stream(inputData.get(0).split("\\s+"))
+    private void readPositions() throws IOException {
+        positions = Arrays.stream(inputData.get(0).split("\\s+"))
                 .filter(x -> x.matches("\\[\\d,\\d]"))
                 .map(x -> {
                     var split = x.replaceAll("[\\[\\]]+", "").split(",");
-                    return new Coordinates(Integer.parseInt(split[0]), Integer.parseInt(split[1]));
+                    return new Pos(Integer.parseInt(split[0]), Integer.parseInt(split[1]));
                 })
                 .filter(coordinate -> coordinate.x() >= 0 && coordinate.x() < 9)
                 .filter(coordinate -> coordinate.y() >= 0 && coordinate.y() < 9)
                 .toList();
 
-        if (coordinates.size() != 6)
+        if (positions.size() != 6)
             throw new IOException("Invalid coordinates");
     }
 
     private void readScenario() throws IOException {
-        var scenario = Integer.parseInt(inputData.get(1));
+        scenario = Integer.parseInt(inputData.get(1));
         if (scenario != 1 && scenario != 2)
             throw new IOException("Invalid scenario");
     }
 
-    public List<Coordinates> getCoordinates() {
-        return coordinates;
+    public List<Pos> getPositions() {
+        return positions;
     }
 
     public int getScenario() {
