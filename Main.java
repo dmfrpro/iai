@@ -21,19 +21,17 @@ public class Main {
 
             OutputHelper.printWin(
                     aStarOut,
-                    new Snapshot(List.of(new Pos(0, 0)), cells.toString()),
-                    15
+                    new Snapshot(List.of(new Pos(0, 0)), cells.toString(), 10)
             );
 
             cells.removeKraken();
             OutputHelper.printWin(
                     backtrackingOut,
-                    new Snapshot(List.of(new Pos(0, 0)), cells.toString()),
-                    14
+                    new Snapshot(List.of(new Pos(0, 0)), cells.toString(), 11)
             );
 
-            OutputHelper.printWin(new Snapshot(List.of(new Pos(0, 0)), cells.toString()), 1);
-            OutputHelper.printWin(new Snapshot(List.of(new Pos(0, 0)), cells.toString()), 2);
+            OutputHelper.printWin(new Snapshot(List.of(new Pos(0, 0)), cells.toString(), 21));
+            OutputHelper.printWin(new Snapshot(List.of(new Pos(0, 0)), cells.toString(), 22));
 
             OutputHelper.printLose(aStarOut);
 
@@ -88,14 +86,14 @@ record Pos(int x, int y) {
     }
 }
 
-record Snapshot(List<Pos> shortestPath, String cells) {
+record Snapshot(List<Pos> shortestPath, String cells, long timeMillis) {
     @Override
     public String toString() {
         var shortestPathString = shortestPath.stream()
                 .map(Pos::toString)
                 .collect(Collectors.joining(" "));
 
-        return String.format("%d\n%s\n%s", shortestPath.size(), shortestPathString, cells);
+        return String.format("%d\n%s\n%s%d ms\n", shortestPath.size(), shortestPathString, cells, timeMillis);
     }
 }
 
@@ -319,6 +317,10 @@ class Cells {
     }
 }
 
+class Backtracking {
+
+}
+
 class InputHelper {
     private static List<String> inputData;
     private static List<Pos> positions;
@@ -394,14 +396,14 @@ class OutputHelper {
         System.out.println("Lose\n");
     }
 
-    static void printWin(Path outputPath, Snapshot snapshot, long timeMillis) throws IOException {
+    static void printWin(Path outputPath, Snapshot snapshot) throws IOException {
         Files.writeString(
                 outputPath,
-                String.format("Win\n%s%d ms\n", snapshot, timeMillis)
+                String.format("Win\n%s", snapshot)
         );
     }
 
-    static void printWin(Snapshot snapshot, long timeMillis) {
-        System.out.printf("Win\n%s%d ms\n", snapshot, timeMillis);
+    static void printWin(Snapshot snapshot) {
+        System.out.printf("Win\n%s", snapshot);
     }
 }
