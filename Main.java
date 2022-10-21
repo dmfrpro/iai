@@ -9,8 +9,8 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Main {
-    public static final Path backtrackingOut = Path.of("outputBacktracking.txt");
-    public static final Path aStarOut = Path.of("outputAStar.txt");
+    static final Path backtrackingOut = Path.of("outputBacktracking.txt");
+    static final Path aStarOut = Path.of("outputAStar.txt");
 
     public static void main(String[] args) {
         try {
@@ -19,21 +19,11 @@ public class Main {
             var scenario = InputHelper.getScenario();
             var cells = new Cells(positions);
 
-            OutputHelper.printWin(
-                    aStarOut,
-                    new Snapshot(List.of(new Pos(0, 0)), cells.toString(), 10)
-            );
+            var backtrackingRunner = new Backtracking(cells, scenario);
+            backtrackingRunner.run();
 
-            cells.removeKraken();
-            OutputHelper.printWin(
-                    backtrackingOut,
-                    new Snapshot(List.of(new Pos(0, 0)), cells.toString(), 11)
-            );
-
-            OutputHelper.printWin(new Snapshot(List.of(new Pos(0, 0)), cells.toString(), 21));
-            OutputHelper.printWin(new Snapshot(List.of(new Pos(0, 0)), cells.toString(), 22));
-
-            OutputHelper.printLose(aStarOut);
+            var snapshot = backtrackingRunner.getCurrentSnapshot();
+            OutputHelper.printResult(backtrackingOut, snapshot);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -66,18 +56,35 @@ enum CellType {
 }
 
 record Pos(int x, int y) {
-    Set<Pos> neighbors(int x, int y) {
-        return Set.of(
-                new Pos(x, y + 1), new Pos(x, y - 1),
-                new Pos(x + 1, y), new Pos(x - 1, y)
-        );
+    List<Pos> neighbors() {
+        List<Pos> set = new ArrayList<>(4);
+        set.add(new Pos(x, y + 1));
+        set.add(new Pos(x, y - 1));
+        set.add(new Pos(x + 1, y));
+        set.add(new Pos(x - 1, y));
+        return set;
     }
 
-    Set<Pos> corners(int x, int y) {
-        return Set.of(
-                new Pos(x, y + 1), new Pos(x, y - 1),
-                new Pos(x + 1, y), new Pos(x - 1, y)
-        );
+    List<Pos> corners() {
+        List<Pos> set = new ArrayList<>(4);
+        set.add(new Pos(x + 1, y + 1));
+        set.add(new Pos(x + 1, y - 1));
+        set.add(new Pos(x - 1, y + 1));
+        set.add(new Pos(x - 1, y - 1));
+        return set;
+    }
+
+    List<Pos> secondNeighbors() {
+        List<Pos> set = new ArrayList<>(4);
+        set.add(new Pos(x + 2, y));
+        set.add(new Pos(x - 2, y));
+        set.add(new Pos(x, y + 2));
+        set.add(new Pos(x, y - 2));
+        return set;
+    }
+
+    int squaredDistanceTo(Pos pos) {
+        return (int) (Math.pow(pos.x - x, 2) + Math.pow(pos.y - y, 2));
     }
 
     @Override
@@ -104,6 +111,9 @@ class Cells {
     private Pos jackSparrow;
     private Pos davyJones;
     private Pos kraken;
+
+    private Pos chest;
+    private Pos tortuga;
 
     private final CellType[] davyJonesExclusions = new CellType[0];
 
@@ -198,11 +208,15 @@ class Cells {
     }
 
     private boolean setChest(int x, int y) {
-        return trySetCell(CellType.CHEST, x, y, chestExclusions);
+        var result = trySetCell(CellType.CHEST, x, y, chestExclusions);
+        if (result) chest = new Pos(x, y);
+        return result;
     }
 
     private boolean setTortuga(int x, int y) {
-        return trySetCell(CellType.TORTUGA, x, y, tortugaExclusions);
+        var result = trySetCell(CellType.TORTUGA, x, y, tortugaExclusions);
+        if (result) tortuga = new Pos(x, y);
+        return result;
     }
 
     private boolean setJackSparrow(int x, int y) {
@@ -235,7 +249,7 @@ class Cells {
         else return getRandomPos();
     }
 
-    public Cells(List<Pos> pos) {
+    Cells(List<Pos> pos) {
         cells = emptyCells();
 
         var generationResult = Stream.of(
@@ -251,7 +265,7 @@ class Cells {
             throw new IllegalArgumentException("Invalid pos");
     }
 
-    public Cells() {
+    Cells() {
         cells = emptyCells();
 
         setJackSparrow(0, 0);
@@ -277,6 +291,14 @@ class Cells {
             pos = getRandomPos();
     }
 
+    void trySetPath(int x, int y) {
+        trySetCell(CellType.PATH, x, y);
+    }
+
+    void tryUnsetPath(CellType previousCell, int x, int y) {
+        trySetCell(previousCell, x, y);
+    }
+
     void removeKraken() {
         var type = cells[kraken.y()][kraken.x()] == CellType.KRAKEN_ROCK
                 ? CellType.ROCK
@@ -295,6 +317,18 @@ class Cells {
             return Optional.empty();
 
         return Optional.ofNullable(cells[y][x]);
+    }
+
+    Pos getJackSparrow() {
+        return jackSparrow;
+    }
+
+    Pos getChest() {
+        return chest;
+    }
+
+    Pos getTortuga() {
+        return tortuga;
     }
 
     @Override
@@ -319,6 +353,100 @@ class Cells {
 
 class Backtracking {
 
+    private final Stack<Pos> shortestPath = new Stack<>();
+    private final Cells cells;
+
+    private final int scenario;
+
+    private final Pos chest;
+
+    private final Pos tortuga;
+
+    private Snapshot currentSnapshot;
+    private int minShortestPath = Integer.MAX_VALUE;
+
+    private List<Pos> scenarioMoves(Pos pos) {
+        var result = pos.neighbors();
+        result.addAll(pos.corners());
+
+//        if (scenario == 2)
+//            result.addAll(pos.secondNeighbors());
+
+        return result.stream()
+                .filter(p -> cells.getCell(p.x(), p.y()).isPresent())
+                .sorted((p1, p2) -> p1.squaredDistanceTo(chest) - p2.squaredDistanceTo(chest))
+                .toList();
+    }
+
+
+    private boolean isLosingPos(Pos pos) {
+        var cell = cells.getCell(pos.x(), pos.y());
+        return cell.map(type -> type == CellType.DANGEROUS ||
+                type == CellType.ROCK ||
+                type == CellType.KRAKEN ||
+                type == CellType.KRAKEN_ROCK).orElse(false);
+    }
+
+    private void takeSnapshot() {
+        currentSnapshot = new Snapshot(new ArrayList<>(shortestPath), cells.toString(), 0);
+//        System.out.println(currentSnapshot);
+    }
+
+    private void doBacktracking(Pos currentPos) {
+        if (isLosingPos(currentPos)) return;
+
+        // +1 for the new pos which will be pushed into shortestPath
+        if (shortestPath.size() + 1 < minShortestPath) {
+
+            shortestPath.push(currentPos);
+
+            var optCell = cells.getCell(currentPos.x(), currentPos.y());
+            if (optCell.isEmpty()) return;
+
+            cells.trySetPath(currentPos.x(), currentPos.y());
+//            System.out.println(cells);
+
+            if (optCell.get() == CellType.CHEST) {
+                takeSnapshot();
+                minShortestPath = shortestPath.size();
+            } else
+                for (var pos : scenarioMoves(currentPos))
+                    doBacktracking(pos);
+
+            shortestPath.pop();
+            cells.tryUnsetPath(optCell.get(), currentPos.x(), currentPos.y());
+        }
+    }
+
+    Backtracking(Cells cells, int scenario) {
+        this.cells = cells;
+        this.scenario = scenario;
+        this.chest = cells.getChest();
+        this.tortuga = cells.getTortuga();
+    }
+
+    Snapshot getCurrentSnapshot() {
+        return currentSnapshot;
+    }
+
+    void run() {
+        long startMillis = System.currentTimeMillis();
+
+        // If Jack Sparrow is already spawned in danger zone,
+        // then we immediately lose
+        if (isLosingPos(cells.getJackSparrow())) return;
+
+        for (var pos : scenarioMoves(cells.getJackSparrow()))
+            doBacktracking(pos);
+
+        // Force update snapshot time via copying the snapshot
+        if (currentSnapshot != null)
+            currentSnapshot = new Snapshot(
+                    currentSnapshot.shortestPath(),
+                    currentSnapshot.cells(),
+                    System.currentTimeMillis() - startMillis
+            );
+    }
 }
 
 class InputHelper {
@@ -388,22 +516,17 @@ class InputHelper {
 
 class OutputHelper {
 
-    static void printLose(Path outputPath) throws IOException {
-        Files.writeString(outputPath, "Lose\n");
+    static void printResult(Path outputPath, Snapshot snapshot) throws IOException {
+        if (snapshot == null)
+            Files.writeString(outputPath, "Lose\n");
+        else
+            Files.writeString(outputPath, String.format("Win\n%s", snapshot));
     }
 
-    static void printLose() {
-        System.out.println("Lose\n");
-    }
-
-    static void printWin(Path outputPath, Snapshot snapshot) throws IOException {
-        Files.writeString(
-                outputPath,
-                String.format("Win\n%s", snapshot)
-        );
-    }
-
-    static void printWin(Snapshot snapshot) {
-        System.out.printf("Win\n%s", snapshot);
+    static void printResult(Snapshot snapshot) {
+        if (snapshot == null)
+            System.out.println("Lose");
+        else
+            System.out.printf("Win\n%s", snapshot);
     }
 }
