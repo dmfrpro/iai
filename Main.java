@@ -6,7 +6,6 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 public class Main {
@@ -17,10 +16,23 @@ public class Main {
             var scenario = InputHelper.getScenario();
             var cells = new Cells(positions);
 
-            System.out.println(cells);
+            OutputHelper.printWin(
+                    Path.of("outputAStar.txt"),
+                    List.of(new Pos(0, 0)),
+                    cells.toString(),
+                    15
+            );
+
             cells.removeKraken();
-            System.out.println(cells);
-            System.out.println(new Cells());
+            OutputHelper.printWin(
+                    Path.of("outputBacktracking.txt"),
+                    List.of(new Pos(0, 0)),
+                    cells.toString(),
+                    14
+            );
+
+            OutputHelper.printWin(List.of(new Pos(0, 0)), new Cells().toString(), 1);
+            OutputHelper.printWin(List.of(new Pos(0, 0)), new Cells().toString(), 2);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -36,7 +48,9 @@ enum CellType {
     DANGEROUS("#"),
     DAVY_JONES("D"),
     TORTUGA("T"),
-    CHEST("C");
+    CHEST("C"),
+
+    PATH("*");
 
     private final String icon;
 
@@ -53,16 +67,16 @@ enum CellType {
 record Pos(int x, int y) {
     Set<Pos> neighbors(int x, int y) {
         return Set.of(
-                        new Pos(x, y + 1), new Pos(x, y - 1),
-                        new Pos(x + 1, y), new Pos(x - 1, y)
-                );
+                new Pos(x, y + 1), new Pos(x, y - 1),
+                new Pos(x + 1, y), new Pos(x - 1, y)
+        );
     }
 
     Set<Pos> corners(int x, int y) {
         return Set.of(
-                        new Pos(x, y + 1), new Pos(x, y - 1),
-                        new Pos(x + 1, y), new Pos(x - 1, y)
-                );
+                new Pos(x, y + 1), new Pos(x, y - 1),
+                new Pos(x + 1, y), new Pos(x - 1, y)
+        );
     }
 
     @Override
@@ -218,7 +232,7 @@ class Cells {
                 setRock(pos.get(3).x(), pos.get(3).y()),
                 setChest(pos.get(4).x(), pos.get(4).y()),
                 setTortuga(pos.get(5).x(), pos.get(5).y()),
-                setJackSparrow(pos.get(0).x(),pos.get(0).y())
+                setJackSparrow(pos.get(0).x(), pos.get(0).y())
         ).allMatch(result -> result);
 
         if (!generationResult)
@@ -273,23 +287,20 @@ class Cells {
 
     @Override
     public String toString() {
-        var indexesRow = IntStream.iterate(0, i -> i + 1)
-                .limit(9)
-                .mapToObj(String::valueOf)
-                .collect(Collectors.joining(" "));
+        var builder = new StringBuilder("-".repeat(19)).append("\n  ");
 
-        var builder = new StringBuilder("  ").append(indexesRow).append('\n');
+        for (int i = 0; i < 8; i++)
+            builder.append(i).append(" ");
+        builder.append(8).append("\n");
 
-        IntStream.iterate(0, i -> i + 1)
-                .limit(9)
-                .forEach(i -> {
-                    builder.append(i).append(' ');
-                    var row = Arrays.stream(cells[i])
-                            .map(Object::toString)
-                            .collect(Collectors.joining(" "));
-                    builder.append(row).append('\n');
-                });
+        for (int x = 0; x < 9; x++) {
+            builder.append(x).append(" ");
+            for (int y = 0; y < 8; y++)
+                builder.append(cells[y][x]).append(" ");
+            builder.append(cells[8][x]).append("\n");
+        }
 
+        builder.append("-".repeat(19)).append('\n');
         return builder.toString();
     }
 }
@@ -356,5 +367,35 @@ class InputHelper {
 
     static int getScenario() {
         return scenario;
+    }
+}
+
+class OutputHelper {
+
+    static void printLose(Path outputPath) throws IOException {
+        Files.writeString(outputPath, "Lose");
+    }
+
+    static void printLose() {
+        System.out.println("Lose");
+    }
+
+    static void printWin(Path outputPath, List<Pos> shortestPath, String matrix, long timeMillis) throws IOException {
+        var shortestPathString = shortestPath.stream()
+                .map(Pos::toString)
+                .collect(Collectors.joining(" "));
+
+        Files.writeString(
+                outputPath,
+                String.format("Win\n%d\n%s\n%s%d ms\n", shortestPath.size(), shortestPathString, matrix, timeMillis)
+        );
+    }
+
+    static void printWin(List<Pos> shortestPath, String matrix, long timeMillis) {
+        var shortestPathString = shortestPath.stream()
+                .map(Pos::toString)
+                .collect(Collectors.joining(" "));
+
+        System.out.printf("Win\n%d\n%s\n%s%d ms\n", shortestPath.size(), shortestPathString, matrix, timeMillis);
     }
 }
