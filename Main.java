@@ -9,6 +9,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class Main {
+    public static final Path backtrackingOut = Path.of("outputBacktracking.txt");
+    public static final Path aStarOut = Path.of("outputAStar.txt");
+
     public static void main(String[] args) {
         try {
             InputHelper.tryInitStreams(Path.of("input.txt"));
@@ -17,20 +20,22 @@ public class Main {
             var cells = new Cells(positions);
 
             OutputHelper.printWin(
-                    Path.of("outputAStar.txt"),
+                    aStarOut,
                     new Snapshot(List.of(new Pos(0, 0)), cells.toString()),
                     15
             );
 
             cells.removeKraken();
             OutputHelper.printWin(
-                    Path.of("outputBacktracking.txt"),
+                    backtrackingOut,
                     new Snapshot(List.of(new Pos(0, 0)), cells.toString()),
                     14
             );
 
             OutputHelper.printWin(new Snapshot(List.of(new Pos(0, 0)), cells.toString()), 1);
             OutputHelper.printWin(new Snapshot(List.of(new Pos(0, 0)), cells.toString()), 2);
+
+            OutputHelper.printLose(aStarOut);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -382,11 +387,11 @@ class InputHelper {
 class OutputHelper {
 
     static void printLose(Path outputPath) throws IOException {
-        Files.writeString(outputPath, "Lose");
+        Files.writeString(outputPath, "Lose\n");
     }
 
     static void printLose() {
-        System.out.println("Lose");
+        System.out.println("Lose\n");
     }
 
     static void printWin(Path outputPath, Snapshot snapshot, long timeMillis) throws IOException {
