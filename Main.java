@@ -138,17 +138,17 @@ class Cells {
         trySetCell(type, x, y - 1, exclusions);
     }
 
-    private void setDangerousCorners(int x, int y, CellType... exclusions) {
-        trySetCell(CellType.DANGEROUS, x + 1, y + 1, exclusions);
-        trySetCell(CellType.DANGEROUS, x + 1, y - 1, exclusions);
-        trySetCell(CellType.DANGEROUS, x - 1, y + 1, exclusions);
-        trySetCell(CellType.DANGEROUS, x - 1, y - 1, exclusions);
+    private void setDangerousCorners(int x, int y) {
+        trySetCell(CellType.DANGEROUS, x + 1, y + 1, dangerousExclusions);
+        trySetCell(CellType.DANGEROUS, x + 1, y - 1, dangerousExclusions);
+        trySetCell(CellType.DANGEROUS, x - 1, y + 1, dangerousExclusions);
+        trySetCell(CellType.DANGEROUS, x - 1, y - 1, dangerousExclusions);
     }
 
     private void setDavyJones(int x, int y) {
         validateAndSetCell(CellType.DAVY_JONES, x, y, davyJonesExclusions);
         setNeighbors(CellType.DANGEROUS, x, y, dangerousExclusions);
-        setDangerousCorners(x, y, dangerousExclusions);
+        setDangerousCorners(x, y);
 
         davyJones = new Coordinates(x, y);
     }
@@ -213,9 +213,9 @@ class Cells {
         validateAndSetCell(type, kraken.getX(), kraken.getY(), freeExclusions);
         setNeighbors(CellType.FREE, kraken.getX(), kraken.getY(), freeExclusions);
 
-        // Update perception zones of Dave Jones
+        // Update perception zones of Davy Jones
         setNeighbors(CellType.DANGEROUS, davyJones.getX(), davyJones.getY(), dangerousExclusions);
-        setDangerousCorners(davyJones.getX(), davyJones.getY(), dangerousExclusions);
+        setDangerousCorners(davyJones.getX(), davyJones.getY());
     }
 
     Optional<CellType> getCell(int x, int y) {
