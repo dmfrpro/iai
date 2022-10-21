@@ -252,8 +252,8 @@ class InputHelper {
     private int scenario;
 
     private void tryInitStreams(Path inputPath) {
-        try (var stream = Files.lines(inputPath)) {
-            inputData = stream.toList();
+        try {
+            inputData = Files.readAllLines(inputPath);
 
             if (inputData.size() < 2)
                 throw new IOException("Number of input file lines is < 2");
