@@ -572,13 +572,13 @@ class Backtracking {
 
     private final Stack<Point> steps = new Stack<>();
 
-    private Point start;
     private Point target;
 
     private int minStepsCount = Integer.MAX_VALUE;
 
     private int minPrevDistance = Integer.MAX_VALUE;
     private int potential = 0;
+    private int potentialLimit = 9;
 
     private List<Point> scenarioMoves(Point point) {
         return Stream.concat(
@@ -606,13 +606,9 @@ class Backtracking {
     private void doBacktracking(Point point) {
         if (isLosing(point)) return;
         if (steps.size() + 1 >= minStepsCount) return;
-        if (potential > 6) return;
+        if (potential > potentialLimit) return;
 
         steps.push(point);
-
-        if (point.getX() == 4 && point.getY() == 6) {
-            int a = 0;
-        }
 
         var cellCopy = point.getCell();
         gameData.trySetPath(point.getX(), point.getY());
@@ -640,17 +636,9 @@ class Backtracking {
         } else {
             minPrevDistance = currentDistance;
 
-//            if (hasVisitedTortuga && moves.stream().anyMatch(p -> p.getCell().isKraken())) {
-//                hasKilledKraken = gameData.tryRemoveKraken();
-//                krakenDeathSteps = steps.size();
-//            }
-
             for (var p : moves)
                 doBacktracking(p);
         }
-
-//        if (steps.size() == krakenDeathSteps - 1)
-//            gameData.trySetKraken(gameData.getKraken().getX(), gameData.getKraken().getY());
 
         gameData.tryUnsetPath(cellCopy, point.getX(), point.getY());
         steps.pop();
@@ -659,7 +647,6 @@ class Backtracking {
     private void doRun(Point start, Point target) {
         if (isLosing(start)) return;
 
-        this.start = start;
         this.target = target;
 
         var cellCopy = start.getCell();
@@ -707,6 +694,8 @@ class Backtracking {
 
         Snapshot immediateRun = null;
 
+        potentialLimit = 6;
+
         if (firstRun != null) {
             var tortugaStartData = firstRun.gameData().clone();
 
@@ -721,9 +710,6 @@ class Backtracking {
 
                 var nearKraken = secondRun.steps().get(secondRun.steps().size() - 1);
 
-                System.out.println("DDDDDDDDDDDDD");
-                System.out.println(krakenStartData.getMatrix());
-
                 thirdRun = wrappedRun(nearKraken, gameData.getChest(), krakenStartData);
 
                 if (thirdRun != null) {
@@ -731,11 +717,16 @@ class Backtracking {
                     combinedList.addAll(secondRun.steps());
                     combinedList.addAll(thirdRun.steps());
                     overrideSnapshot(combinedList, thirdRun.gameData(), 0);
+
+                    combinedRun = currentSnapshot;
+                    currentSnapshot = null;
                 }
             }
         }
 
-//        immediateRun = wrappedRun(gameData.getJackSparrow(), gameData.getChest(), initialGameData);
+        potentialLimit = 9;
+
+        immediateRun = wrappedRun(gameData.getJackSparrow(), gameData.getChest(), initialGameData);
 
         var result = Stream.of(combinedRun, immediateRun)
                 .filter(Objects::nonNull)
@@ -752,58 +743,6 @@ class Backtracking {
                     System.currentTimeMillis() - startMillis
             );
         }
-
-
-//        // Try without passing tortuga
-////        doRun(gameData.getJackSparrow(), gameData.getChest());
-//
-//        Snapshot firstSnapshot = currentSnapshot;
-//        Snapshot secondSnapshot = null;
-//        Snapshot thirdSnapshot = null;
-//        Snapshot fourthSnapshot= null;
-//
-//        // Reset currentSnapshot for the next 3 runs
-//        currentSnapshot = null;
-//
-//        // Reset gameData to initial
-//        gameData = initialGameData;
-//
-//        // Run to tortuga
-//        doRun(gameData.getJackSparrow(), gameData.getTortuga());
-//
-////        System.out.println(currentSnapshot.gameData().getMatrix());
-//
-//        // If run is successful:
-//        if (currentSnapshot != null) {
-//            gameData = currentSnapshot.gameData();
-//
-//            var tortugaSteps = new ArrayList<>(currentSnapshot.steps());
-//
-//            // Reset currentSnapshot for the next 2 runs
-//            currentSnapshot = null;
-//
-//            steps.clear();
-//
-//            // Run from tortuga to chest
-//            doRun(gameData.getTortuga(), gameData.getKraken());
-//
-//            // If run is successful:
-//            if (currentSnapshot != null) {
-//                tortugaSteps.addAll(currentSnapshot.steps());
-//                overrideSnapshot(tortugaSteps, currentSnapshot.gameData(), 0);
-//
-////                System.out.println(currentSnapshot.gameData().getMatrix());
-//
-//                secondSnapshot = currentSnapshot;
-//            }
-//        }
-//
-//        var results = Stream.of(firstSnapshot, secondSnapshot)
-//                .filter(Objects::nonNull)
-//                .sorted(Comparator.comparingInt(s -> s.steps().size()))
-//                .toList();
-//
-//        currentSnapshot = results.size() == 0 ? null : results.get(0);
     }
 
     public Snapshot getCurrentSnapshot() {
