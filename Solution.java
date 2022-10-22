@@ -705,9 +705,6 @@ class Backtracking {
                 var krakenStartData = secondRun.gameData().clone();
                 krakenStartData.tryRemoveKraken();
 
-                System.out.println(secondRun.gameData().getMatrix());
-                System.out.println(secondRun.steps());
-
                 var nearKraken = secondRun.steps().get(secondRun.steps().size() - 1);
 
                 thirdRun = wrappedRun(nearKraken, gameData.getChest(), krakenStartData);
