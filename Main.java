@@ -394,17 +394,18 @@ class Backtracking {
     private final Cells cells;
 
     private final int scenario;
-    private final Pos tortuga;
 
     private Snapshot currentSnapshot;
     private int minShortestPath = Integer.MAX_VALUE;
-    private int currentSquaredDistance = Integer.MAX_VALUE;
+    private int prevDistance = Integer.MAX_VALUE;
+
+    private int extraStepsCount = 0;
 
     private List<Pos> scenarioMoves(Pos pos) {
         return Stream.of(pos.neighbors(), pos.corners())
                 .flatMap(List::stream)
                 .filter(p -> !shortestPath.contains(p))
-                .sorted((p1, p2) -> p1.squaredDistanceTo(cells.getChest()) - p2.squaredDistanceTo(cells.getChest()))
+//                .sorted((p1, p2) -> p1.squaredDistanceTo(cells.getChest()) - p2.squaredDistanceTo(cells.getChest()))
                 .toList();
     }
 
@@ -426,10 +427,15 @@ class Backtracking {
         // +1 for the new pos which will be pushed into shortestPath
         if (shortestPath.size() + 1 < minShortestPath) {
 
-            var tmp = currentSquaredDistance;
-            if (currentPos.squaredDistanceTo(cells.getChest()) < currentSquaredDistance)
-                currentSquaredDistance = currentPos.squaredDistanceTo(cells.getChest());
-            else if (scenarioMoves(currentPos).isEmpty()) return;
+            var currentDist = currentPos.squaredDistanceTo(cells.getChest());
+
+            if (extraStepsCount > 9) return;
+
+            if (currentDist < prevDistance)
+                extraStepsCount = 0;
+            else
+                ++extraStepsCount;
+
 
             shortestPath.push(currentPos);
 
@@ -441,20 +447,20 @@ class Backtracking {
             if (optCell.get() == CellType.CHEST) {
                 takeSnapshot();
                 minShortestPath = shortestPath.size();
-            } else
+            } else {
+                prevDistance = currentPos.squaredDistanceTo(cells.getChest());
                 for (var pos : scenarioMoves(currentPos))
                     doBacktracking(pos);
+            }
 
             shortestPath.pop();
             cells.tryUnsetPath(optCell.get(), currentPos);
-            currentSquaredDistance = tmp;
         }
     }
 
     Backtracking(Cells cells, int scenario) {
         this.cells = cells;
         this.scenario = scenario;
-        this.tortuga = cells.getTortuga();
     }
 
     Snapshot getCurrentSnapshot() {
