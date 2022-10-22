@@ -394,22 +394,19 @@ class Backtracking {
     private final Cells cells;
 
     private final int scenario;
-
-    private final Pos chest;
-
     private final Pos tortuga;
 
     private Snapshot currentSnapshot;
     private int minShortestPath = Integer.MAX_VALUE;
+    private int currentSquaredDistance = Integer.MAX_VALUE;
 
     private List<Pos> scenarioMoves(Pos pos) {
         return Stream.of(pos.neighbors(), pos.corners())
                 .flatMap(List::stream)
                 .filter(p -> !shortestPath.contains(p))
-                .sorted((p1, p2) -> p1.squaredDistanceTo(chest) - p2.squaredDistanceTo(chest))
+                .sorted((p1, p2) -> p1.squaredDistanceTo(cells.getChest()) - p2.squaredDistanceTo(cells.getChest()))
                 .toList();
     }
-
 
     private boolean isLosingPos(Pos pos) {
         var cell = cells.getCell(pos);
@@ -429,7 +426,10 @@ class Backtracking {
         // +1 for the new pos which will be pushed into shortestPath
         if (shortestPath.size() + 1 < minShortestPath) {
 
-//            System.out.println(cells);
+            var tmp = currentSquaredDistance;
+            if (currentPos.squaredDistanceTo(cells.getChest()) < currentSquaredDistance)
+                currentSquaredDistance = currentPos.squaredDistanceTo(cells.getChest());
+            else if (scenarioMoves(currentPos).isEmpty()) return;
 
             shortestPath.push(currentPos);
 
@@ -447,13 +447,13 @@ class Backtracking {
 
             shortestPath.pop();
             cells.tryUnsetPath(optCell.get(), currentPos);
+            currentSquaredDistance = tmp;
         }
     }
 
     Backtracking(Cells cells, int scenario) {
         this.cells = cells;
         this.scenario = scenario;
-        this.chest = cells.getChest();
         this.tortuga = cells.getTortuga();
     }
 
@@ -470,24 +470,20 @@ class Backtracking {
 
         var oldCell = cells.getCell(cells.getJackSparrow());
         if (oldCell.isPresent()) {
-            try {
-                cells.trySetPath(cells.getJackSparrow());
+            cells.trySetPath(cells.getJackSparrow());
 
-                for (var pos : scenarioMoves(cells.getJackSparrow()))
-                    doBacktracking(pos);
+            for (var pos : scenarioMoves(cells.getJackSparrow()))
+                doBacktracking(pos);
 
-                // Force update snapshot time via copying the snapshot
-                if (currentSnapshot != null)
-                    currentSnapshot = new Snapshot(
-                            currentSnapshot.shortestPath(),
-                            currentSnapshot.cells(),
-                            System.currentTimeMillis() - startMillis
-                    );
+            // Force update snapshot time via copying the snapshot
+            if (currentSnapshot != null)
+                currentSnapshot = new Snapshot(
+                        currentSnapshot.shortestPath(),
+                        currentSnapshot.cells(),
+                        System.currentTimeMillis() - startMillis
+                );
 
-                cells.tryUnsetPath(oldCell.get(), cells.getJackSparrow());
-            } catch (StackOverflowError ignored) {
-                System.out.println("SOF");
-            }
+            cells.tryUnsetPath(oldCell.get(), cells.getJackSparrow());
         }
     }
 }
