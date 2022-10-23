@@ -20,16 +20,13 @@ public class Solution {
             var scenario = InputHelper.getScenario();
 
             var game = new GameData(point);
-            System.out.println(game);
 
             var backtracking = new Backtracking(game);
             backtracking.run();
-
-            var snapshot = backtracking.getCurrentSnapshot();
-            OutputHelper.printResult(snapshot);
+            OutputHelper.printResult(backtracking.getCurrentSnapshot());
 
         } catch (Exception e) {
-            e.printStackTrace();
+            System.out.println(e.getMessage());
         }
     }
 }
@@ -85,23 +82,23 @@ enum ObjectCell implements Cell {
 }
 
 class Matrix implements Cloneable {
-    private Point[][] matrix = new Point[9][9];
+    private BPoint[][] matrix = new BPoint[9][9];
 
     public Matrix() {
         for (int y = 0; y < 9; y++)
-            matrix[y] = new Point[9];
+            matrix[y] = new BPoint[9];
 
         for (int y = 0; y < 9; y++)
             for (int x = 0; x < 9; x++)
-                matrix[x][y] = new Point(x, y);
+                matrix[x][y] = new BPoint(x, y);
     }
 
-    public Optional<Point> getPoint(int x, int y) {
+    public Optional<BPoint> getPoint(int x, int y) {
         if (y < 0 || y >= 9 || x < 0 || x >= 9) return Optional.empty();
         return Optional.of(matrix[x][y]);
     }
 
-    public Stream<Point> neighbors(int x, int y) {
+    public Stream<BPoint> neighbors(int x, int y) {
         return Stream.of(
                         getPoint(x, y + 1), getPoint(x, y - 1),
                         getPoint(x + 1, y), getPoint(x - 1, y)
@@ -110,7 +107,7 @@ class Matrix implements Cloneable {
                 .map(p -> p.orElse(null));
     }
 
-    public Stream<Point> corners(int x, int y) {
+    public Stream<BPoint> corners(int x, int y) {
         return Stream.of(
                         getPoint(x + 1, y + 1), getPoint(x + 1, y - 1),
                         getPoint(x - 1, y + 1), getPoint(x - 1, y - 1)
@@ -119,7 +116,7 @@ class Matrix implements Cloneable {
                 .map(p -> p.orElse(null));
     }
 
-    public Stream<Point> secondNeighbors(int x, int y) {
+    public Stream<BPoint> secondNeighbors(int x, int y) {
         return Stream.of(
                         getPoint(x, y + 2), getPoint(x, y - 2),
                         getPoint(x + 2, y), getPoint(x - 2, y)
@@ -147,16 +144,15 @@ class Matrix implements Cloneable {
         return builder.toString();
     }
 
-
     @Override
     public Matrix clone() {
         try {
             var clone = (Matrix) super.clone();
 
-            clone.matrix = new Point[9][9];
+            clone.matrix = new BPoint[9][9];
 
             for (int i = 0; i < 9; i++)
-                clone.matrix[i] = new Point[9];
+                clone.matrix[i] = new BPoint[9];
 
             for (int y = 0; y < 9; y++)
                 for (int x = 0; x < 9; x++)
@@ -169,9 +165,9 @@ class Matrix implements Cloneable {
     }
 }
 
-class Point implements Cloneable {
-
+abstract class Point implements Cloneable {
     private final int x;
+
     private final int y;
 
     private boolean path = false;
@@ -195,32 +191,23 @@ class Point implements Cloneable {
         return path;
     }
 
-    public void setPath(boolean path) {
-        this.path = path;
-    }
-
     public Cell getCell() {
         return cell;
+    }
+
+    public void setPath(boolean path) {
+        this.path = path;
     }
 
     public void setCell(Cell cell) {
         this.cell = cell;
     }
 
-    public int distanceSquared(Point point) {
-        return (int) (Math.pow(point.x - x, 2) + Math.pow(point.y - y, 2));
-    }
-
     @Override
-    public String toString() {
-        return String.format("[%d,%d]", x, y);
-    }
-
-    @Override
-    public Point clone() {
+    public BPoint clone() {
         try {
-            var clone = (Point) super.clone();
-            clone.cell = cell;
+            var clone = (BPoint) super.clone();
+            clone.setCell(getCell());
             return clone;
         } catch (CloneNotSupportedException e) {
             throw new AssertionError();
@@ -239,6 +226,32 @@ class Point implements Cloneable {
     public int hashCode() {
         return Objects.hash(x, y);
     }
+
+    @Override
+    public String toString() {
+        return String.format("[%d,%d]", getX(), getY());
+    }
+}
+
+class BPoint extends Point {
+
+    private int cost = Integer.MAX_VALUE;
+
+    public BPoint(int x, int y) {
+        super(x, y);
+    }
+
+    public int getCost() {
+        return cost;
+    }
+
+    public void setCost(int cost) {
+        this.cost = cost;
+    }
+
+    public int distanceSquared(BPoint point) {
+        return (int) (Math.pow(point.getX() - getX(), 2) + Math.pow(point.getY() - getY(), 2));
+    }
 }
 
 class GameData implements Cloneable {
@@ -246,12 +259,12 @@ class GameData implements Cloneable {
     private static final Random RANDOM = new Random();
     private Matrix matrix = new Matrix();
 
-    private Point jackSparrow;
-    private Point davyJones;
-    private Point kraken;
-    private Point rock;
-    private Point chest;
-    private Point tortuga;
+    private BPoint jackSparrow;
+    private BPoint davyJones;
+    private BPoint kraken;
+    private BPoint rock;
+    private BPoint chest;
+    private BPoint tortuga;
 
     private boolean trySetEnemy(Cell cell, int x, int y) {
         if (matrix.getPoint(x, y).isPresent()) {
@@ -409,14 +422,14 @@ class GameData implements Cloneable {
         return false;
     }
 
-    private Point getRandomPoint() {
+    private BPoint getRandomPoint() {
         var optPos = matrix.getPoint(RANDOM.nextInt(0, 9), RANDOM.nextInt(0, 9));
         if (optPos.isEmpty() || (optPos.get().getX() == 0 && optPos.get().getY() != 0))
             return getRandomPoint();
         return optPos.get();
     }
 
-    public GameData(List<Point> points) {
+    public GameData(List<BPoint> points) {
         var generationResult = Stream.of(
                 trySetDavyJones(points.get(1).getX(), points.get(1).getY()),
                 trySetKraken(points.get(2).getX(), points.get(2).getY()),
@@ -460,27 +473,27 @@ class GameData implements Cloneable {
         return matrix;
     }
 
-    public Point getJackSparrow() {
+    public BPoint getJackSparrow() {
         return jackSparrow;
     }
 
-    public Point getDavyJones() {
+    public BPoint getDavyJones() {
         return davyJones;
     }
 
-    public Point getKraken() {
+    public BPoint getKraken() {
         return kraken;
     }
 
-    public Point getRock() {
+    public BPoint getRock() {
         return rock;
     }
 
-    public Point getChest() {
+    public BPoint getChest() {
         return chest;
     }
 
-    public Point getTortuga() {
+    public BPoint getTortuga() {
         return tortuga;
     }
 
@@ -509,21 +522,21 @@ class GameData implements Cloneable {
 
 class Snapshot {
 
-    private List<Point> steps;
+    private List<BPoint> steps;
     private GameData gameData;
     private long timeMillis;
 
-    public Snapshot(List<Point> steps, GameData gameData, long timeMillis) {
+    public Snapshot(List<BPoint> steps, GameData gameData, long timeMillis) {
         this.steps = steps;
         this.gameData = gameData;
         this.timeMillis = timeMillis;
     }
 
-    public List<Point> getSteps() {
+    public List<BPoint> getSteps() {
         return steps;
     }
 
-    public void setSteps(List<Point> steps) {
+    public void setSteps(List<BPoint> steps) {
         this.steps = steps;
     }
 
@@ -546,7 +559,7 @@ class Snapshot {
     @Override
     public String toString() {
         var shortestPathString = steps.stream()
-                .map(Point::toString)
+                .map(BPoint::toString)
                 .collect(Collectors.joining(" "));
 
         return String.format("%d\n%s\n%s\n%d ms\n", steps.size(), shortestPathString, gameData.getMatrix(), timeMillis);
@@ -555,32 +568,32 @@ class Snapshot {
 
 class Backtracking {
     private GameData gameData;
+
+    private int[][] costs = new int[9][9];
     private Snapshot currentSnapshot;
 
-    private final Stack<Point> steps = new Stack<>();
+    private final Stack<BPoint> steps = new Stack<>();
 
-    private Point target;
+    private BPoint target;
 
     private int minStepsCount = Integer.MAX_VALUE;
 
-    private int minPrevDistance = Integer.MAX_VALUE;
-    private int potential = 0;
-
-    private List<Point> moves(Point point) {
+    private List<BPoint> moves(BPoint point) {
         return Stream.concat(
                         gameData.getMatrix().corners(point.getX(), point.getY()),
                         gameData.getMatrix().neighbors(point.getX(), point.getY())
                 )
-                .filter(p -> !steps.contains(p) && (p.getCell().isKraken() || p.getCell().isSafe()))
+                .filter(p -> p.getCell().isKraken() || p.getCell().isSafe())
+                .filter(p -> p.getCost() >= steps.size())
                 .sorted((p1, p2) -> p1.distanceSquared(target) - p2.distanceSquared(target))
                 .toList();
     }
 
-    private boolean isLosing(Point point) {
+    private boolean isLosing(BPoint point) {
         return point.getCell().isDangerous();
     }
 
-    private void overrideSnapshot() {
+    private void takeSnapshot() {
         if (currentSnapshot == null || currentSnapshot.getSteps().size() > steps.size())
             currentSnapshot = new Snapshot(new ArrayList<>(steps), gameData.clone(), -1);
         else {
@@ -589,7 +602,7 @@ class Backtracking {
         }
     }
 
-    private void overrideSnapshot(List<Point> steps, GameData gameData) {
+    private void takeSnapshot(List<BPoint> steps, GameData gameData) {
         if (currentSnapshot == null)
             currentSnapshot = new Snapshot(steps, gameData, -1);
         else {
@@ -598,29 +611,27 @@ class Backtracking {
         }
     }
 
-    private void doBacktracking(Point point) {
+    private void doBacktracking(BPoint point) {
         if (isLosing(point)) return;
         if (steps.size() + 1 >= minStepsCount) return;
-        if (potential > 18) return;
+
+        if (costs[point.getX()][point.getY()] < steps.size()) return;
+
+        if (point.getX() == 8 && point.getY() == 6) {
+            int a = 0;
+        }
 
         steps.push(point);
 
         gameData.setPath(point.getX(), point.getY());
 
-        var currentDistance = point.distanceSquared(target);
-
-        potential = currentDistance < minPrevDistance ? potential - 1 : potential + 1;
-        potential = Math.max(0, potential);
-
         var moves = moves(point);
 
         if (target.getCell().isKraken()) {
             if (moves.stream().anyMatch(p -> p.getCell().isKraken())) {
-                overrideSnapshot();
+                takeSnapshot();
 
                 minStepsCount = steps.size();
-                minPrevDistance = 0;
-                potential = 0;
 
                 gameData.unsetPath(point.getX(), point.getY());
                 steps.pop();
@@ -630,42 +641,53 @@ class Backtracking {
         }
 
         if (point.equals(target)) {
-            overrideSnapshot();
+            takeSnapshot();
 
             minStepsCount = steps.size();
-            minPrevDistance = 0;
-            potential = 0;
 
         } else {
-            minPrevDistance = Math.min(currentDistance, minPrevDistance);
 
             for (var p : moves)
+                costs[p.getX()][p.getY()] = Math.min(costs[point.getX()][point.getY()] + 1, costs[p.getX()][p.getY()]);
+
+            for (var p : moves) {
                 doBacktracking(p);
+            }
         }
 
         gameData.unsetPath(point.getX(), point.getY());
         steps.pop();
     }
 
-    private Snapshot wrappedRun(Point start, Point target, GameData data) {
+    private Snapshot wrappedRun(BPoint start, BPoint target, GameData data) {
         var tmpGameData = gameData.clone();
         gameData = data;
+
+        cleanCosts();
 
         if (isLosing(start)) return null;
 
         this.target = target;
 
+        costs[start.getX()][start.getY()] = 0;
+
+        var moves = moves(start);
+
+        for (var p : moves)
+            costs[p.getX()][p.getY()] = Math.min(costs[start.getX()][start.getY()] + 1, costs[p.getX()][p.getY()]);
+
         gameData.setPath(start.getX(), start.getY());
 
-        for (var p : moves(start))
+        for (var p : moves)
             doBacktracking(p);
 
         gameData.unsetPath(start.getX(), start.getY());
+        start.setCost(Integer.MAX_VALUE);
+
+        cleanCosts();
 
         // Force reset minStepsCount for other runs
         minStepsCount = Integer.MAX_VALUE;
-        minPrevDistance = Integer.MAX_VALUE;
-        potential = 0;
 
         gameData = tmpGameData;
 
@@ -675,8 +697,16 @@ class Backtracking {
         return snapshotCopy;
     }
 
+    private void cleanCosts() {
+        for (int i = 0; i < 9; i++)
+            for (int j = 0; j < 9; j++)
+                costs[i][j] = Integer.MAX_VALUE;
+    }
+
     public Backtracking(GameData gameData) {
         this.gameData = gameData;
+
+        cleanCosts();
     }
 
     public void run() {
@@ -705,7 +735,7 @@ class Backtracking {
                     var combinedList = new ArrayList<>(firstRun.getSteps());
                     combinedList.addAll(secondRun.getSteps());
                     combinedList.addAll(thirdRun.getSteps());
-                    overrideSnapshot(combinedList, thirdRun.getGameData());
+                    takeSnapshot(combinedList, thirdRun.getGameData());
 
                     combinedRun = currentSnapshot;
                     currentSnapshot = null;
@@ -736,7 +766,7 @@ class Backtracking {
 class InputHelper {
     private static final Path INPUT = Path.of("input.txt");
     private static List<String> inputData;
-    private static List<Point> points;
+    private static List<BPoint> points;
     private static int scenario;
 
     private static final Matrix MATRIX = new Matrix();
@@ -787,7 +817,7 @@ class InputHelper {
             throw new IOException("Invalid scenario");
     }
 
-    static List<Point> getPoints() {
+    static List<BPoint> getPoints() {
         return points;
     }
 
