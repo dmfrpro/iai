@@ -22,8 +22,14 @@ public class Solution {
             var game = new GameData(point);
 
             var backtracking = new Backtracking(game);
+
+            var startMillis = System.currentTimeMillis();
             backtracking.run();
-            OutputHelper.printResult(backtracking.getCurrentSnapshot());
+
+            OutputHelper.printResult(
+                    backtracking.getCurrentSnapshot(),
+                    System.currentTimeMillis() - startMillis
+            );
 
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -524,12 +530,10 @@ class Snapshot {
 
     private List<BPoint> steps;
     private GameData gameData;
-    private long timeMillis;
 
-    public Snapshot(List<BPoint> steps, GameData gameData, long timeMillis) {
+    public Snapshot(List<BPoint> steps, GameData gameData) {
         this.steps = steps;
         this.gameData = gameData;
-        this.timeMillis = timeMillis;
     }
 
     public List<BPoint> getSteps() {
@@ -548,21 +552,13 @@ class Snapshot {
         this.gameData = gameData;
     }
 
-    public long getTimeMillis() {
-        return timeMillis;
-    }
-
-    public void setTimeMillis(long timeMillis) {
-        this.timeMillis = timeMillis;
-    }
-
     @Override
     public String toString() {
         var shortestPathString = steps.stream()
                 .map(BPoint::toString)
                 .collect(Collectors.joining(" "));
 
-        return String.format("%d\n%s\n%s\n%d ms\n", steps.size(), shortestPathString, gameData.getMatrix(), timeMillis);
+        return String.format("%d\n%s\n%s", steps.size(), shortestPathString, gameData.getMatrix());
     }
 }
 
@@ -595,7 +591,7 @@ class Backtracking {
 
     private void takeSnapshot() {
         if (currentSnapshot == null || currentSnapshot.getSteps().size() > steps.size())
-            currentSnapshot = new Snapshot(new ArrayList<>(steps), gameData.clone(), -1);
+            currentSnapshot = new Snapshot(new ArrayList<>(steps), gameData.clone());
         else {
             currentSnapshot.setSteps(steps);
             currentSnapshot.setGameData(gameData);
@@ -604,7 +600,7 @@ class Backtracking {
 
     private void takeSnapshot(List<BPoint> steps, GameData gameData) {
         if (currentSnapshot == null)
-            currentSnapshot = new Snapshot(steps, gameData, -1);
+            currentSnapshot = new Snapshot(steps, gameData);
         else {
             currentSnapshot.setSteps(steps);
             currentSnapshot.setGameData(gameData);
@@ -750,12 +746,8 @@ class Backtracking {
                 .sorted(Comparator.comparingInt(p -> p.getSteps().size()))
                 .toList();
 
-        if (!result.isEmpty()) {
+        if (!result.isEmpty())
             currentSnapshot = result.get(0);
-
-            // Force update time
-            currentSnapshot.setTimeMillis(System.currentTimeMillis() - startMillis);
-        }
     }
 
     public Snapshot getCurrentSnapshot() {
@@ -828,13 +820,13 @@ class InputHelper {
 
 class OutputHelper {
 
-    static void printResult(Path outputPath, Snapshot snapshot) throws IOException {
+    static void printResult(Path outputPath, Snapshot snapshot, long millis) throws IOException {
         if (snapshot == null) Files.writeString(outputPath, "Lose\n");
-        else Files.writeString(outputPath, String.format("Win\n%s", snapshot));
+        else Files.writeString(outputPath, String.format("Win\n%s\n%d ms\n", snapshot, millis));
     }
 
-    static void printResult(Snapshot snapshot) {
+    static void printResult(Snapshot snapshot, long millis) {
         if (snapshot == null) System.out.println("Lose");
-        else System.out.printf("Win\n%s", snapshot);
+        else System.out.printf("Win\n%s\n%d ms\n", snapshot, millis);
     }
 }
