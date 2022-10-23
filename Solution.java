@@ -647,8 +647,11 @@ class Backtracking {
         steps.pop();
     }
 
-    private void doRun(Point start, Point target) {
-        if (isLosing(start)) return;
+    private Snapshot wrappedRun(Point start, Point target, GameData data) {
+        var tmpGameData = gameData.clone();
+        gameData = data;
+
+        if (isLosing(start)) return null;
 
         this.target = target;
 
@@ -663,17 +666,6 @@ class Backtracking {
         minStepsCount = Integer.MAX_VALUE;
         minPrevDistance = Integer.MAX_VALUE;
         potential = 0;
-    }
-
-    public Backtracking(GameData gameData) {
-        this.gameData = gameData;
-    }
-
-    public Snapshot wrappedRun(Point start, Point target, GameData data) {
-        var tmpGameData = gameData.clone();
-        gameData = data;
-
-        doRun(start, target);
 
         gameData = tmpGameData;
 
@@ -681,6 +673,10 @@ class Backtracking {
         currentSnapshot = null;
 
         return snapshotCopy;
+    }
+
+    public Backtracking(GameData gameData) {
+        this.gameData = gameData;
     }
 
     public void run() {
