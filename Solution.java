@@ -634,6 +634,14 @@ class Backtracking {
     }
 
     private Snapshot wrappedRun(Point start, Point target, GameData data) {
+        if (start == target) {
+            takeSnapshot(new ArrayList<>(), gameData.clone());
+            var snapshotCopy = currentSnapshot;
+            currentSnapshot = null;
+
+            return snapshotCopy;
+        }
+
         var tmpGameData = gameData.clone();
         gameData = data;
 
