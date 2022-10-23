@@ -63,71 +63,31 @@ interface Cell {
     default boolean isFree() {
         return this.hasType(AirCell.class);
     }
+
+    default boolean isPath() {
+        return this == AirCell.PATH;
+    }
 }
 
 enum AirCell implements Cell {
-    PERCEPTION("#"),
-    FREE("_"),
-    PATH("*");
-
-    private final String name;
-
-    AirCell(String name) {
-        this.name = name;
-    }
-
-    @Override
-    public String toString() {
-        return name;
-    }
+    PERCEPTION,
+    FREE,
+    PATH
 }
 
 enum EnemyCell implements Cell {
-    DAVY_JONES("D");
-
-    private final String name;
-
-    EnemyCell(String name) {
-        this.name = name;
-    }
-
-    @Override
-    public String toString() {
-        return name;
-    }
+    DAVY_JONES
 }
 
 enum KrakenPairCell implements Cell {
-    KRAKEN("k"),
-    ROCK("R"),
-    KRAKEN_ROCK("K");
-
-    private final String name;
-
-    KrakenPairCell(String name) {
-        this.name = name;
-    }
-
-    @Override
-    public String toString() {
-        return name;
-    }
+    KRAKEN,
+    ROCK,
+    KRAKEN_ROCK
 }
 
 enum ObjectCell implements Cell {
-    TORTUGA("T"),
-    CHEST("C");
-
-    private final String name;
-
-    ObjectCell(String name) {
-        this.name = name;
-    }
-
-    @Override
-    public String toString() {
-        return name;
-    }
+    TORTUGA,
+    CHEST
 }
 
 class Matrix implements Cloneable {
@@ -185,8 +145,8 @@ class Matrix implements Cloneable {
         for (int y = 0; y < 9; y++) {
             builder.append(y).append(" ");
             for (int x = 0; x < 8; x++)
-                builder.append(matrix[y][x].getCell()).append(" ");
-            builder.append(matrix[y][8].getCell()).append("\n");
+                builder.append(matrix[y][x].getCell().isPath() ? "*" : "_").append(" ");
+            builder.append(matrix[y][8].getCell().isPath() ? "*" : "_").append("\n");
         }
 
         builder.append("-".repeat(19));
@@ -320,8 +280,8 @@ class GameData implements Cloneable {
         return false;
     }
 
-    private boolean trySetAir(Cell cell, int x, int y) {
-        return trySetEnemy(cell, x, y);
+    private void trySetAir(Cell cell, int x, int y) {
+        trySetEnemy(cell, x, y);
     }
 
     private boolean trySetJackSparrow(int x, int y) {
@@ -351,23 +311,12 @@ class GameData implements Cloneable {
         return false;
     }
 
-    public boolean trySetPath(int x, int y) {
-        if (matrix.getPoint(x, y).isPresent()) {
-
-            var point = matrix.getPoint(x, y).get();
-            var matrixCell = point.getCell();
-
-            if (matrixCell.hasType(AirCell.class) || matrixCell.hasType(ObjectCell.class)) {
-                point.setCell(AirCell.PATH);
-                return true;
-            }
-        }
-
-        return false;
+    public void setPath(int x, int y) {
+        matrix.getPoint(x, y).ifPresent(p -> p.setCell(AirCell.PATH));
     }
 
-    public boolean tryUnsetPath(Cell newCell, int x, int y) {
-        return trySetAir(newCell, x, y);
+    public void unsetPath(Cell newCell, int x, int y) {
+        matrix.getPoint(x, y).ifPresent(p -> p.setCell(newCell));
     }
 
     public boolean trySetKraken(int x, int y) {
@@ -611,7 +560,7 @@ class Backtracking {
         steps.push(point);
 
         var cellCopy = point.getCell();
-        gameData.trySetPath(point.getX(), point.getY());
+        gameData.setPath(point.getX(), point.getY());
 
         var currentDistance = point.distanceSquared(target);
 
@@ -623,7 +572,7 @@ class Backtracking {
             if (moves.stream().anyMatch(p -> p.getCell().isKraken())) {
                 overrideSnapshot();
 
-                gameData.tryUnsetPath(cellCopy, point.getX(), point.getY());
+                gameData.unsetPath(cellCopy, point.getX(), point.getY());
                 steps.pop();
 
                 return; // We found Kraken!
@@ -640,7 +589,7 @@ class Backtracking {
                 doBacktracking(p);
         }
 
-        gameData.tryUnsetPath(cellCopy, point.getX(), point.getY());
+        gameData.unsetPath(cellCopy, point.getX(), point.getY());
         steps.pop();
     }
 
@@ -650,12 +599,12 @@ class Backtracking {
         this.target = target;
 
         var cellCopy = start.getCell();
-        gameData.trySetPath(start.getX(), start.getY());
+        gameData.setPath(start.getX(), start.getY());
 
         for (var p : scenarioMoves(start))
             doBacktracking(p);
 
-        gameData.tryUnsetPath(cellCopy, start.getX(), start.getY());
+        gameData.unsetPath(cellCopy, start.getX(), start.getY());
 
         // Force reset minStepsCount for other runs
         minStepsCount = Integer.MAX_VALUE;
@@ -686,20 +635,15 @@ class Backtracking {
         var initialGameData = gameData.clone();
 
 
-        Snapshot firstRun = wrappedRun(gameData.getJackSparrow(), gameData.getTortuga(), initialGameData);
-        Snapshot secondRun = null;
-        Snapshot thirdRun = null;
-
+        var firstRun = wrappedRun(gameData.getJackSparrow(), gameData.getTortuga(), initialGameData);
         Snapshot combinedRun = null;
-
-        Snapshot immediateRun = null;
 
         potentialLimit = 6;
 
         if (firstRun != null) {
             var tortugaStartData = firstRun.gameData().clone();
 
-            secondRun = wrappedRun(gameData.getTortuga(), gameData.getKraken(), tortugaStartData);
+            var secondRun = wrappedRun(gameData.getTortuga(), gameData.getKraken(), tortugaStartData);
 
             if (secondRun != null) {
                 var krakenStartData = secondRun.gameData().clone();
@@ -707,7 +651,7 @@ class Backtracking {
 
                 var nearKraken = secondRun.steps().get(secondRun.steps().size() - 1);
 
-                thirdRun = wrappedRun(nearKraken, gameData.getChest(), krakenStartData);
+                var thirdRun = wrappedRun(nearKraken, gameData.getChest(), krakenStartData);
 
                 if (thirdRun != null) {
                     var combinedList = new ArrayList<>(firstRun.steps());
@@ -723,7 +667,7 @@ class Backtracking {
 
         potentialLimit = 9;
 
-        immediateRun = wrappedRun(gameData.getJackSparrow(), gameData.getChest(), initialGameData);
+        var immediateRun = wrappedRun(gameData.getJackSparrow(), gameData.getChest(), initialGameData);
 
         var result = Stream.of(combinedRun, immediateRun)
                 .filter(Objects::nonNull)
