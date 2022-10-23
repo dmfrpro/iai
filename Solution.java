@@ -9,13 +9,12 @@ import java.util.stream.Stream;
 
 public class Solution {
 
-    private static final Path INPUT = Path.of("input.txt");
     private static final Path BACKTRACKING_OUT = Path.of("outputBacktracking.txt");
     private static final Path A_STAR_OUT = Path.of("outputAStar.txt");
 
     public static void main(String[] args) {
         try {
-            InputHelper.tryInitStreams(INPUT);
+            InputHelper.tryInitStreams();
 
             var point = InputHelper.getPoints();
             var scenario = InputHelper.getScenario();
@@ -527,7 +526,6 @@ class Backtracking {
 
     private int minPrevDistance = Integer.MAX_VALUE;
     private int potential = 0;
-    private int potentialLimit = 9;
 
     private List<Point> moves(Point point) {
         return Stream.concat(
@@ -554,7 +552,7 @@ class Backtracking {
 
     private void doBacktracking(Point point) {
         if (steps.size() + 1 >= minStepsCount) return;
-        if (potential > potentialLimit) return;
+        if (potential > 18) return;
 
         steps.push(point);
 
@@ -637,8 +635,6 @@ class Backtracking {
         var firstRun = wrappedRun(gameData.getJackSparrow(), gameData.getTortuga(), initialGameData);
         Snapshot combinedRun = null;
 
-        potentialLimit = 6;
-
         if (firstRun != null) {
             var tortugaStartData = firstRun.gameData().clone();
 
@@ -663,8 +659,6 @@ class Backtracking {
                 }
             }
         }
-
-        potentialLimit = 9;
 
         var immediateRun = wrappedRun(gameData.getJackSparrow(), gameData.getChest(), initialGameData);
 
@@ -691,39 +685,35 @@ class Backtracking {
 }
 
 class InputHelper {
+    private static final Path INPUT = Path.of("input.txt");
     private static List<String> inputData;
     private static List<Point> points;
     private static int scenario;
 
     private static final Matrix MATRIX = new Matrix();
 
-    static void tryInitStreams(Path inputPath) {
-        try {
-            inputData = Files.readAllLines(inputPath);
+    private static void parseInput() throws IOException {
+        if (inputData.size() < 2)
+            throw new IOException("Number of input console lines is < 2");
 
-            if (inputData.size() < 2)
-                throw new IOException("Number of input file lines is < 2");
+        readPoints();
+        readScenario();
+    }
 
-            readPoints();
-            readScenario();
-        } catch (IOException ignored) {
-            try (var console = new BufferedReader(new InputStreamReader(System.in))) {
-                System.out.println("Enter the input data:");
-                inputData = Stream.of(console.readLine(), console.readLine()).toList();
+    static void tryInitStreams() throws IOException {
+        try (var reader = new BufferedReader(new InputStreamReader(System.in))) {
+            System.out.println("Choose the input source:\n[1] File\n[2] Console\nType number:");
 
-                if (inputData.size() < 2)
-                    throw new IOException("Number of input console lines is < 2");
-
-                readPoints();
-                readScenario();
-            } catch (IOException e) {
-                System.out.printf(
-                        "Please either update the data in %s or type correct input in the console\n",
-                        inputPath
-                );
-
-//                tryInitStreams(inputPath);
+            switch (Integer.parseInt(reader.readLine())) {
+                case 1 -> inputData = Files.readAllLines(INPUT);
+                case 2 -> {
+                    System.out.println("Enter the data:");
+                    inputData = Stream.of(reader.readLine(), reader.readLine()).toList();
+                }
+                default -> throw new IOException("Invalid number!");
             }
+
+            parseInput();
         }
     }
 
