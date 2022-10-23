@@ -44,7 +44,7 @@ interface Cell {
     }
 
     default boolean isSafe() {
-        return this instanceof ObjectCell || (this == AirCell.PATH || this == AirCell.FREE);
+        return this instanceof ObjectCell || this == AirCell.FREE;
     }
 
     default boolean isPerception() {
@@ -62,16 +62,11 @@ interface Cell {
     default boolean isFree() {
         return this.hasType(AirCell.class);
     }
-
-    default boolean isPath() {
-        return this == AirCell.PATH;
-    }
 }
 
 enum AirCell implements Cell {
     PERCEPTION,
-    FREE,
-    PATH
+    FREE
 }
 
 enum EnemyCell implements Cell {
@@ -144,8 +139,8 @@ class Matrix implements Cloneable {
         for (int y = 0; y < 9; y++) {
             builder.append(y).append(" ");
             for (int x = 0; x < 8; x++)
-                builder.append(matrix[y][x].getCell().isPath() ? "*" : "_").append(" ");
-            builder.append(matrix[y][8].getCell().isPath() ? "*" : "_").append("\n");
+                builder.append(matrix[y][x].isPath() ? "*" : "_").append(" ");
+            builder.append(matrix[y][8].isPath() ? "*" : "_").append("\n");
         }
 
         builder.append("-".repeat(19));
@@ -179,12 +174,13 @@ class Point implements Cloneable {
     private final int x;
     private final int y;
 
-    private Cell cell;
+    private boolean path = false;
+
+    private Cell cell = AirCell.FREE;
 
     public Point(int x, int y) {
         this.x = x;
         this.y = y;
-        this.cell = AirCell.FREE;
     }
 
     public int getX() {
@@ -193,6 +189,14 @@ class Point implements Cloneable {
 
     public int getY() {
         return y;
+    }
+
+    public boolean isPath() {
+        return path;
+    }
+
+    public void setPath(boolean path) {
+        this.path = path;
     }
 
     public Cell getCell() {
@@ -286,7 +290,7 @@ class GameData implements Cloneable {
     private boolean trySetJackSparrow(int x, int y) {
         if (matrix.getPoint(x, y).isPresent()) {
             var cell = matrix.getPoint(x, y).get().getCell();
-            if (cell.isFree()) {
+            if (cell.isFree() || cell == ObjectCell.TORTUGA) {
                 jackSparrow = matrix.getPoint(x, y).get();
                 return true;
             }
@@ -311,11 +315,11 @@ class GameData implements Cloneable {
     }
 
     public void setPath(int x, int y) {
-        matrix.getPoint(x, y).ifPresent(p -> p.setCell(AirCell.PATH));
+        matrix.getPoint(x, y).ifPresent(p -> p.setPath(true));
     }
 
-    public void unsetPath(Cell newCell, int x, int y) {
-        matrix.getPoint(x, y).ifPresent(p -> p.setCell(newCell));
+    public void unsetPath(int x, int y) {
+        matrix.getPoint(x, y).ifPresent(p -> p.setPath(false));
     }
 
     public boolean trySetKraken(int x, int y) {
@@ -503,7 +507,42 @@ class GameData implements Cloneable {
     }
 }
 
-record Snapshot(List<Point> steps, GameData gameData, long timeMillis) {
+class Snapshot {
+
+    private List<Point> steps;
+    private GameData gameData;
+    private long timeMillis;
+
+    public Snapshot(List<Point> steps, GameData gameData, long timeMillis) {
+        this.steps = steps;
+        this.gameData = gameData;
+        this.timeMillis = timeMillis;
+    }
+
+    public List<Point> getSteps() {
+        return steps;
+    }
+
+    public void setSteps(List<Point> steps) {
+        this.steps = steps;
+    }
+
+    public GameData getGameData() {
+        return gameData;
+    }
+
+    public void setGameData(GameData gameData) {
+        this.gameData = gameData;
+    }
+
+    public long getTimeMillis() {
+        return timeMillis;
+    }
+
+    public void setTimeMillis(long timeMillis) {
+        this.timeMillis = timeMillis;
+    }
+
     @Override
     public String toString() {
         var shortestPathString = steps.stream()
@@ -542,12 +581,21 @@ class Backtracking {
     }
 
     private void overrideSnapshot() {
-        if (currentSnapshot == null || currentSnapshot.steps().size() > steps.size())
-            currentSnapshot = new Snapshot(new ArrayList<>(steps), gameData.clone(), 0);
+        if (currentSnapshot == null || currentSnapshot.getSteps().size() > steps.size())
+            currentSnapshot = new Snapshot(new ArrayList<>(steps), gameData.clone(), -1);
+        else {
+            currentSnapshot.setSteps(steps);
+            currentSnapshot.setGameData(gameData);
+        }
     }
 
-    private void overrideSnapshot(List<Point> steps, GameData gameData, long timeMillis) {
-        currentSnapshot = new Snapshot(steps, gameData, timeMillis);
+    private void overrideSnapshot(List<Point> steps, GameData gameData) {
+        if (currentSnapshot == null)
+            currentSnapshot = new Snapshot(steps, gameData, -1);
+        else {
+            currentSnapshot.setSteps(steps);
+            currentSnapshot.setGameData(gameData);
+        }
     }
 
     private void doBacktracking(Point point) {
@@ -557,7 +605,6 @@ class Backtracking {
 
         steps.push(point);
 
-        var cellCopy = point.getCell();
         gameData.setPath(point.getX(), point.getY());
 
         var currentDistance = point.distanceSquared(target);
@@ -575,7 +622,7 @@ class Backtracking {
                 minPrevDistance = 0;
                 potential = 0;
 
-                gameData.unsetPath(cellCopy, point.getX(), point.getY());
+                gameData.unsetPath(point.getX(), point.getY());
                 steps.pop();
 
                 return; // We found Kraken!
@@ -596,7 +643,7 @@ class Backtracking {
                 doBacktracking(p);
         }
 
-        gameData.unsetPath(cellCopy, point.getX(), point.getY());
+        gameData.unsetPath(point.getX(), point.getY());
         steps.pop();
     }
 
@@ -605,13 +652,12 @@ class Backtracking {
 
         this.target = target;
 
-        var cellCopy = start.getCell();
         gameData.setPath(start.getX(), start.getY());
 
         for (var p : moves(start))
             doBacktracking(p);
 
-        gameData.unsetPath(cellCopy, start.getX(), start.getY());
+        gameData.unsetPath(start.getX(), start.getY());
 
         // Force reset minStepsCount for other runs
         minStepsCount = Integer.MAX_VALUE;
@@ -647,23 +693,23 @@ class Backtracking {
         Snapshot combinedRun = null;
 
         if (firstRun != null) {
-            var tortugaStartData = firstRun.gameData().clone();
+            var tortugaStartData = firstRun.getGameData().clone();
 
             var secondRun = wrappedRun(gameData.getTortuga(), gameData.getKraken(), tortugaStartData);
 
             if (secondRun != null) {
-                var krakenStartData = secondRun.gameData().clone();
+                var krakenStartData = secondRun.getGameData().clone();
                 krakenStartData.tryRemoveKraken();
 
-                var nearKraken = secondRun.steps().get(secondRun.steps().size() - 1);
+                var nearKraken = secondRun.getSteps().get(secondRun.getSteps().size() - 1);
 
                 var thirdRun = wrappedRun(nearKraken, gameData.getChest(), krakenStartData);
 
                 if (thirdRun != null) {
-                    var combinedList = new ArrayList<>(firstRun.steps());
-                    combinedList.addAll(secondRun.steps());
-                    combinedList.addAll(thirdRun.steps());
-                    overrideSnapshot(combinedList, thirdRun.gameData(), 0);
+                    var combinedList = new ArrayList<>(firstRun.getSteps());
+                    combinedList.addAll(secondRun.getSteps());
+                    combinedList.addAll(thirdRun.getSteps());
+                    overrideSnapshot(combinedList, thirdRun.getGameData());
 
                     combinedRun = currentSnapshot;
                     currentSnapshot = null;
@@ -675,18 +721,14 @@ class Backtracking {
 
         var result = Stream.of(combinedRun, immediateRun)
                 .filter(Objects::nonNull)
-                .sorted(Comparator.comparingInt(p -> p.steps().size()))
+                .sorted(Comparator.comparingInt(p -> p.getSteps().size()))
                 .toList();
 
         if (!result.isEmpty()) {
             currentSnapshot = result.get(0);
 
             // Force update time
-            overrideSnapshot(
-                    currentSnapshot.steps(),
-                    currentSnapshot.gameData(),
-                    System.currentTimeMillis() - startMillis
-            );
+            currentSnapshot.setTimeMillis(System.currentTimeMillis() - startMillis);
         }
     }
 
