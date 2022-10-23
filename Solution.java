@@ -551,6 +551,7 @@ class Backtracking {
     }
 
     private void doBacktracking(Point point) {
+        if (isLosing(point)) return;
         if (steps.size() + 1 >= minStepsCount) return;
         if (potential > 18) return;
 
@@ -562,12 +563,17 @@ class Backtracking {
         var currentDistance = point.distanceSquared(target);
 
         potential = currentDistance < minPrevDistance ? potential - 1 : potential + 1;
+        potential = Math.max(0, potential);
 
         var moves = moves(point);
 
         if (target.getCell().isKraken()) {
             if (moves.stream().anyMatch(p -> p.getCell().isKraken())) {
                 overrideSnapshot();
+
+                minStepsCount = steps.size();
+                minPrevDistance = 0;
+                potential = 0;
 
                 gameData.unsetPath(cellCopy, point.getX(), point.getY());
                 steps.pop();
@@ -578,7 +584,11 @@ class Backtracking {
 
         if (point.equals(target)) {
             overrideSnapshot();
+
             minStepsCount = steps.size();
+            minPrevDistance = 0;
+            potential = 0;
+
         } else {
             minPrevDistance = Math.min(currentDistance, minPrevDistance);
 
@@ -605,6 +615,7 @@ class Backtracking {
 
         // Force reset minStepsCount for other runs
         minStepsCount = Integer.MAX_VALUE;
+        minPrevDistance = Integer.MAX_VALUE;
         potential = 0;
     }
 
