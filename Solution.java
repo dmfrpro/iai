@@ -50,16 +50,8 @@ interface Cell {
         return this instanceof ObjectCell || this == AirCell.FREE;
     }
 
-    default boolean isPerception() {
-        return this == AirCell.PERCEPTION;
-    }
-
     default boolean isKraken() {
         return this == KrakenPairCell.KRAKEN || this == KrakenPairCell.KRAKEN_ROCK;
-    }
-
-    default boolean isRock() {
-        return this == KrakenPairCell.ROCK;
     }
 
     default boolean isFree() {
@@ -565,7 +557,7 @@ class Snapshot {
 class Backtracking {
     private GameData gameData;
 
-    private int[][] costs = new int[9][9];
+    private final int[][] costs = new int[9][9];
     private Snapshot currentSnapshot;
 
     private final Stack<BPoint> steps = new Stack<>();
@@ -612,10 +604,6 @@ class Backtracking {
         if (steps.size() + 1 >= minStepsCount) return;
 
         if (costs[point.getX()][point.getY()] < steps.size()) return;
-
-        if (point.getX() == 8 && point.getY() == 6) {
-            int a = 0;
-        }
 
         steps.push(point);
 
@@ -706,10 +694,7 @@ class Backtracking {
     }
 
     public void run() {
-        long startMillis = System.currentTimeMillis();
-
         var initialGameData = gameData.clone();
-
 
         var firstRun = wrappedRun(gameData.getJackSparrow(), gameData.getTortuga(), initialGameData);
         Snapshot combinedRun = null;
