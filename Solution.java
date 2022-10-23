@@ -529,12 +529,12 @@ class Backtracking {
     private int potential = 0;
     private int potentialLimit = 9;
 
-    private List<Point> scenarioMoves(Point point) {
+    private List<Point> moves(Point point) {
         return Stream.concat(
                         gameData.getMatrix().corners(point.getX(), point.getY()),
                         gameData.getMatrix().neighbors(point.getX(), point.getY())
                 )
-                .filter(p -> !steps.contains(p))
+                .filter(p -> !steps.contains(p) && (p.getCell().isKraken() || p.getCell().isSafe()))
                 .sorted((p1, p2) -> p1.distanceSquared(target) - p2.distanceSquared(target))
                 .toList();
     }
@@ -553,7 +553,6 @@ class Backtracking {
     }
 
     private void doBacktracking(Point point) {
-        if (isLosing(point)) return;
         if (steps.size() + 1 >= minStepsCount) return;
         if (potential > potentialLimit) return;
 
@@ -564,9 +563,9 @@ class Backtracking {
 
         var currentDistance = point.distanceSquared(target);
 
-        potential = currentDistance < minPrevDistance ? 0 : potential + 1;
+        potential = currentDistance < minPrevDistance ? potential - 1 : potential + 1;
 
-        var moves = scenarioMoves(point);
+        var moves = moves(point);
 
         if (target.getCell().isKraken()) {
             if (moves.stream().anyMatch(p -> p.getCell().isKraken())) {
@@ -583,7 +582,7 @@ class Backtracking {
             overrideSnapshot();
             minStepsCount = steps.size();
         } else {
-            minPrevDistance = currentDistance;
+            minPrevDistance = Math.min(currentDistance, minPrevDistance);
 
             for (var p : moves)
                 doBacktracking(p);
@@ -601,7 +600,7 @@ class Backtracking {
         var cellCopy = start.getCell();
         gameData.setPath(start.getX(), start.getY());
 
-        for (var p : scenarioMoves(start))
+        for (var p : moves(start))
             doBacktracking(p);
 
         gameData.unsetPath(cellCopy, start.getX(), start.getY());
