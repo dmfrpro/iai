@@ -14,22 +14,26 @@ public class Solution {
 
     public static void main(String[] args) {
         try {
-            InputHelper.tryInitStreams();
+            if (args.length == 0) {
+                InputHelper.tryInitStreams();
 
-            var point = InputHelper.getPoints();
-            var scenario = InputHelper.getScenario();
+                var point = InputHelper.getPoints();
+                var scenario = InputHelper.getScenario();
 
-            var game = new GameData(point);
+                var game = new GameData(point);
 
-            var backtracking = new Backtracking(game);
+                var backtracking = new Backtracking(game);
 
-            var startMillis = System.currentTimeMillis();
-            backtracking.run();
+                var startMillis = System.currentTimeMillis();
+                backtracking.run();
 
-            OutputHelper.printResult(
-                    backtracking.getCurrentSnapshot(),
-                    System.currentTimeMillis() - startMillis
-            );
+                OutputHelper.printResult(
+                        backtracking.getCurrentSnapshot(),
+                        System.currentTimeMillis() - startMillis
+                );
+            } else if (args[0].equals("-t") || args[0].equals("--test")) {
+                System.out.println(TestHelper.run(1000, TestHelper.BACKTRACKING));
+            }
 
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -40,10 +44,6 @@ public class Solution {
 interface Cell {
     default boolean hasType(Class<?> cls) {
         return this.getClass() == cls;
-    }
-
-    default boolean isDangerous() {
-        return this instanceof EnemyCell || this instanceof KrakenPairCell || this == AirCell.PERCEPTION;
     }
 
     default boolean isSafe() {
@@ -175,10 +175,6 @@ class Point implements Cloneable {
     public Point(int x, int y) {
         this.x = x;
         this.y = y;
-    }
-
-    public int distanceSquared(Point point) {
-        return (int) (Math.pow(point.getX() - getX(), 2) + Math.pow(point.getY() - getY(), 2));
     }
 
     public int getX() {
@@ -556,12 +552,11 @@ class Backtracking {
                 )
                 .filter(p -> p.getCell().isKraken() || p.getCell().isSafe())
                 .filter(p -> costs[p.getX()][p.getY()] >= steps.size())
-                .sorted((p1, p2) -> p1.distanceSquared(target) - p2.distanceSquared(target))
                 .toList();
     }
 
     private boolean isLosing(Point point) {
-        return point.getCell().isDangerous();
+        return !point.getCell().isSafe();
     }
 
     private void takeSnapshot() {
@@ -641,11 +636,8 @@ class Backtracking {
         cleanCosts();
 
         if (isLosing(start)) return null;
-
         this.target = target;
-
         costs[start.getX()][start.getY()] = 0;
-
         var moves = moves(start);
 
         for (var p : moves)
@@ -657,12 +649,10 @@ class Backtracking {
             doBacktracking(p);
 
         gameData.unsetPath(start.getX(), start.getY());
-
         cleanCosts();
 
         // Force reset minStepsCount for other runs
         minStepsCount = Integer.MAX_VALUE;
-
         gameData = tmpGameData;
 
         var snapshotCopy = currentSnapshot;
@@ -725,8 +715,106 @@ class Backtracking {
             currentSnapshot = result.get(0);
     }
 
+    public void setGameData(GameData gameData) {
+        this.gameData = gameData;
+    }
+
     public Snapshot getCurrentSnapshot() {
         return currentSnapshot;
+    }
+}
+
+class AStar {
+    private static class Node {
+        Node parent;
+        Point point;
+
+        int g = 1;
+        int f = Integer.MAX_VALUE;
+        int h = Integer.MAX_VALUE;
+
+        int length = 0;
+
+        boolean checked = false;
+        boolean added = false;
+
+        Node(Node parent, Point point) {
+            this.parent = parent;
+            this.point = point;
+        }
+
+        void reset() {
+            parent = null;
+            f = Integer.MAX_VALUE;
+            g = 1;
+            h = Integer.MAX_VALUE;
+            checked = false;
+            added = false;
+        }
+    }
+
+    private final Node[][] nodes = new Node[9][9];
+
+    private final List<Node> checkedList = new LinkedList<>();
+    private final List<Node> addedList = new LinkedList<>();
+
+    private final int scenario;
+
+    private final GameData gameData;
+
+    private Point target;
+
+    private Node currentNode;
+
+    private boolean ended = false;
+    private boolean failed = false;
+
+    private void cleanNodes() {
+        for (int y = 0; y < 9; y++)
+            for (int x = 0; x < 9; x++)
+                nodes[x][y].reset();
+    }
+
+    private void updateHeuristics(Node node) {
+        if (node.checked || node.added) return;
+
+        node.g = node.length + 1;
+        node.h = Math.max(
+                Math.abs(node.point.getX() - target.getX()),
+                Math.abs(node.point.getY() - target.getY())
+        );
+        node.f = node.g + node.h;
+    }
+
+    private boolean isLosing(Point point) {
+        return gameData.getMatrix().getPoint(point.getX(), point.getY()).isEmpty() || !point.getCell().isSafe();
+    }
+
+    private void doAStar(Node node) {
+        if (ended) return;
+
+        node.checked = true;
+        checkedList.add(node);
+    }
+
+    private void wrappedAStar(Point start, Point target) {
+        this.target = target;
+        cleanNodes();
+
+        doAStar(nodes[start.getX()][start.getY()]);
+    }
+
+    public AStar(GameData gameData, int scenario) {
+        this.gameData = gameData;
+        this.scenario = scenario;
+
+        for (int i = 0; i < 9; i++)
+            nodes[i] = new Node[9];
+
+        for (int y = 0; y < 9; y++)
+            for (int x = 0; x < 9; x++)
+                if (gameData.getMatrix().getPoint(x, y).isPresent())
+                    nodes[x][y] = new Node(null, gameData.getMatrix().getPoint(x, y).get());
     }
 }
 
@@ -805,5 +893,92 @@ class OutputHelper {
     static void printResult(Snapshot snapshot, long millis) {
         if (snapshot == null) System.out.println("Lose");
         else System.out.printf("Win\n%s\n%d ms\n", snapshot, millis);
+    }
+}
+
+record TestResult(
+        List<Long> allTimeResults,
+        long max, long min,
+        double mean, double median,
+        double variance, double sDeviation
+) {
+    @Override
+    public String toString() {
+        return "max = " + max + "\n" +
+                "min = " + min + "\n" +
+                "mean = " + mean + "\n" +
+                "median = " + median + "\n" +
+                "variance = " + variance + "\n" +
+                "sDeviation = " + sDeviation;
+    }
+}
+
+class TestHelper {
+    public static final int BACKTRACKING = 0;
+    public static final int A_STAR = 1;
+
+    private static double mean(List<Long> results) {
+        return results.stream().mapToDouble(Long::doubleValue).sum() / results.size();
+    }
+
+    private static double median(List<Long> results) {
+        results.sort(Comparator.comparingInt(Long::intValue));
+
+        return results.size() % 2 == 0
+                ? (results.get(results.size() / 2) + results.get(results.size() / 2)) / 2d
+                : results.get(results.size() / 2) / 2d;
+    }
+
+    private static double variance(List<Long> results) {
+        var mean = mean(results);
+        return results.stream().mapToDouble(x -> Math.pow(x - mean, 2)).sum() / (results.size() - 1);
+    }
+
+    private static double sDeviation(List<Long> results) {
+        return Math.sqrt(variance(results));
+    }
+
+    private static long min(List<Long> results) {
+        var result = results.stream().mapToLong(x -> x).min();
+        if (result.isEmpty()) throw new RuntimeException("Illegal result of min()");
+        return result.getAsLong();
+    }
+
+    private static long max(List<Long> results) {
+        var result = results.stream().mapToLong(x -> x).max();
+        if (result.isEmpty()) throw new RuntimeException("Illegal result of min()");
+        return result.getAsLong();
+    }
+
+    public static TestResult run(int repeatNumber, int algorithm) {
+        var results = new ArrayList<Long>(repeatNumber);
+        long startMillis, endMillis;
+
+        switch (algorithm) {
+            case BACKTRACKING -> {
+                var backtracking = new Backtracking(null);
+                for (int i = 0; i < repeatNumber; i++) {
+                    if (i % 100 == 0) System.out.printf("Running test No. %d\n", i);
+
+                    backtracking.setGameData(new GameData());
+
+                    startMillis = System.currentTimeMillis();
+                    backtracking.run();
+                    endMillis = System.currentTimeMillis();
+
+                    results.add(endMillis - startMillis);
+                }
+            }
+
+            case A_STAR -> throw new IllegalArgumentException("Not working :(");
+            default -> throw new IllegalArgumentException("Illegal algorithm ID");
+        }
+
+        return new TestResult(
+                results,
+                max(results), min(results),
+                mean(results), median(results),
+                variance(results), sDeviation(results)
+        );
     }
 }
