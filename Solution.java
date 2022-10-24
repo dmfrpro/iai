@@ -7,81 +7,155 @@ import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/**
+ * Assignment 1 main class.
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ */
 public class Solution {
-
-    private static final Path BACKTRACKING_OUT = Path.of("outputBacktracking.txt");
-    private static final Path A_STAR_OUT = Path.of("outputAStar.txt");
 
     public static void main(String[] args) {
         try {
             if (args.length == 0) {
-                InputHelper.tryInitStreams();
+                InputHelper.tryInitAndParse();
 
                 var point = InputHelper.getPoints();
                 var scenario = InputHelper.getScenario();
-
                 var game = new GameData(point);
-
                 var backtracking = new Backtracking(game);
 
                 var startMillis = System.currentTimeMillis();
-                backtracking.run();
 
                 OutputHelper.printResult(
-                        backtracking.getCurrentSnapshot(),
+                        OutputHelper.BACKTRACKING_OUT,
+                        backtracking.run(),
                         System.currentTimeMillis() - startMillis
                 );
-            } else if (args[0].equals("-t") || args[0].equals("--test")) {
-                System.out.println(TestHelper.run(1000, TestHelper.BACKTRACKING));
-            }
 
+            } else if (args[0].equals("-t") || args[0].equals("--test")) {
+
+                System.out.printf(
+                        "Backtracking test results:\n%s\n",
+                        TestHelper.run(1000, TestHelper.BACKTRACKING)
+                );
+
+            }
         } catch (Exception e) {
             System.out.println(e.getMessage());
         }
     }
 }
 
+/**
+ * Cell interface containing useful default methods for any derived cell type.
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ */
 interface Cell {
+    /**
+     * Compares cell's class with the given class. Used to determine
+     * if the cell belongs to the group specified by class.
+     *
+     * @param cls Cell enum
+     * @return true if the class is identical to cls
+     */
     default boolean hasType(Class<?> cls) {
         return this.getClass() == cls;
     }
 
+    /**
+     * Determines if the cell is safe to step on.
+     *
+     * @return true if the cell is safe to step on, false otherwise
+     */
     default boolean isSafe() {
         return this instanceof ObjectCell || this == AirCell.FREE;
     }
 
+    /**
+     * Determines if the cell has kraken / kraken on a rock.
+     *
+     * @return true if the cell has kraken / kraken on a rock, false otherwise
+     */
     default boolean isKraken() {
-        return this == KrakenPairCell.KRAKEN || this == KrakenPairCell.KRAKEN_ROCK;
+        return this == KrakenEnemiesFamilyCell.KRAKEN || this == KrakenEnemiesFamilyCell.KRAKEN_ROCK;
     }
 
+    /**
+     * Determines if the cell is free to step on / spawn.
+     *
+     * @return true if the cell is free to step on / spawn, false otherwise
+     */
     default boolean isFree() {
         return this.hasType(AirCell.class);
     }
 }
 
+/**
+ * Air cells (i.e. not containing objects like enemies, tortuga, or chest).
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ * @see Cell
+ */
 enum AirCell implements Cell {
     PERCEPTION,
     FREE
 }
 
+/**
+ * Enemy cells.
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ * @see Cell
+ */
 enum EnemyCell implements Cell {
     DAVY_JONES
 }
 
-enum KrakenPairCell implements Cell {
+/**
+ * Kraken family cells. They are also considered as  removable enemy cells excluding Rock :).
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ * @see Cell
+ */
+enum KrakenEnemiesFamilyCell implements Cell {
     KRAKEN,
     ROCK,
     KRAKEN_ROCK
 }
 
+/**
+ * Other object cells. Jack Sparrow can visit them safely.
+ * Includes the exit - chest.
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ * @see Cell
+ */
 enum ObjectCell implements Cell {
     TORTUGA,
     CHEST
 }
 
+/**
+ * 9x9 matrix representation.
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ * @see GameData
+ * @see Point
+ * @see Cloneable
+ */
 class Matrix implements Cloneable {
+
+    /**
+     * 9x9 Point matrix
+     *
+     * @see Point
+     */
     private Point[][] matrix = new Point[9][9];
 
+    /**
+     * Initialization of an empty matrix.
+     */
     public Matrix() {
         for (int y = 0; y < 9; y++)
             matrix[y] = new Point[9];
@@ -91,11 +165,25 @@ class Matrix implements Cloneable {
                 matrix[x][y] = new Point(x, y);
     }
 
+    /**
+     * Returns the point by the coordinates if it exists.
+     *
+     * @param x x-coordinate.
+     * @param y y-coordinate.
+     * @return point by the coordinates if it exists, <code>Optional.empty()</code> otherwise.
+     */
     public Optional<Point> getPoint(int x, int y) {
         if (y < 0 || y >= 9 || x < 0 || x >= 9) return Optional.empty();
         return Optional.of(matrix[x][y]);
     }
 
+    /**
+     * Returns available (size=[2, 4]) Von-Neumann neighbors of the point by its coordinates.
+     *
+     * @param x x-coordinate.
+     * @param y y-coordinate.
+     * @return opened stream of available Von-Neumann neighbors of the point.
+     */
     public Stream<Point> neighbors(int x, int y) {
         return Stream.of(
                         getPoint(x, y + 1), getPoint(x, y - 1),
@@ -105,6 +193,13 @@ class Matrix implements Cloneable {
                 .map(p -> p.orElse(null));
     }
 
+    /**
+     * Returns available (size=[1, 4]) diagonal neighbors of the point by its coordinates.
+     *
+     * @param x x-coordinate.
+     * @param y y-coordinate.
+     * @return opened stream of available diagonal neighbors of the point.
+     */
     public Stream<Point> corners(int x, int y) {
         return Stream.of(
                         getPoint(x + 1, y + 1), getPoint(x + 1, y - 1),
@@ -114,6 +209,14 @@ class Matrix implements Cloneable {
                 .map(p -> p.orElse(null));
     }
 
+    /**
+     * Returns available (size=[2, 4]) 2nd-order Von-neumann neighbors of the point by its coordinates.
+     *
+     * @param x x-coordinate.
+     * @param y y-coordinate.
+     * @return opened stream of available 2nd-order Von-neumann neighbors of the point.
+     * @see AStar
+     */
     public Stream<Point> secondNeighbors(int x, int y) {
         return Stream.of(
                         getPoint(x, y + 2), getPoint(x, y - 2),
@@ -146,7 +249,6 @@ class Matrix implements Cloneable {
     public Matrix clone() {
         try {
             var clone = (Matrix) super.clone();
-
             clone.matrix = new Point[9][9];
 
             for (int i = 0; i < 9; i++)
@@ -163,13 +265,32 @@ class Matrix implements Cloneable {
     }
 }
 
+/**
+ * Point representation.
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ * @see Matrix
+ */
 class Point implements Cloneable {
+
+    /**
+     * X-coordinate.
+     */
     private final int x;
 
+    /**
+     * Y-coordinate.
+     */
     private final int y;
 
+    /**
+     * Flag indicating if this point is included into the path.
+     */
     private boolean path = false;
 
+    /**
+     * Point's cell type. Free for default.
+     */
     private Cell cell = AirCell.FREE;
 
     public Point(int x, int y) {
@@ -231,18 +352,64 @@ class Point implements Cloneable {
     }
 }
 
+/**
+ * Sea map generator class.
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ * @see Backtracking
+ * @see AStar
+ */
 class GameData implements Cloneable {
 
+    /**
+     * Random numbers generator.
+     */
     private static final Random RANDOM = new Random();
+
+    /**
+     * 9x9 points matrix.
+     */
     private Matrix matrix = new Matrix();
 
+    /**
+     * Jack Sparrow (Main hero) initial spawn coordinates.
+     */
     private Point jackSparrow;
+
+    /**
+     * Davy Jones (Enemy) initial spawn coordinates.
+     */
     private Point davyJones;
+
+    /**
+     * Kraken (Removable Enemy) initial spawn coordinates.
+     */
     private Point kraken;
+
+    /**
+     * Rock (Enemy) initial spawn coordinates.
+     */
     private Point rock;
+
+    /**
+     * Chest (Exit) initial spawn coordinates.
+     */
     private Point chest;
+
+    /**
+     * Tortuga (Island, grants ability to kill kraken after visiting) initial spawn coordinates.
+     */
     private Point tortuga;
 
+    /**
+     * Tries to spawn an enemy by the given coordinates.
+     *
+     * @param cell enemy cell.
+     * @param x    x-coordinate.
+     * @param y    y-coordinate.
+     * @return true if the spawn result is success, false otherwise.
+     * @see EnemyCell
+     */
     private boolean trySetEnemy(Cell cell, int x, int y) {
         if (matrix.getPoint(x, y).isPresent()) {
 
@@ -258,6 +425,15 @@ class GameData implements Cloneable {
         return false;
     }
 
+    /**
+     * Tries to spawn a safe object by the given coordinates.
+     *
+     * @param cell safe object cell.
+     * @param x    x-coordinate.
+     * @param y    y-coordinate.
+     * @return true if the spawn result is success, false otherwise.
+     * @see ObjectCell
+     */
     private boolean trySetObject(Cell cell, int x, int y) {
         if (matrix.getPoint(x, y).isPresent()) {
 
@@ -273,10 +449,25 @@ class GameData implements Cloneable {
         return false;
     }
 
+    /**
+     * Tries to spawn an air by the given coordinates. Ignores unsuccessful tries.
+     *
+     * @param cell air cell.
+     * @param x    x-coordinate.
+     * @param y    y-coordinate.
+     * @see AirCell
+     */
     private void trySetAir(Cell cell, int x, int y) {
         trySetEnemy(cell, x, y);
     }
 
+    /**
+     * Tries to spawn Jack Sparrow by the given coordinates.
+     *
+     * @param x x-coordinate.
+     * @param y y-coordinate.
+     * @return true if the spawn result is success, false otherwise.
+     */
     private boolean trySetJackSparrow(int x, int y) {
         if (matrix.getPoint(x, y).isPresent()) {
             var cell = matrix.getPoint(x, y).get().getCell();
@@ -289,6 +480,13 @@ class GameData implements Cloneable {
         return false;
     }
 
+    /**
+     * Tries to spawn Davy Jones by the given coordinates.
+     *
+     * @param x x-coordinate.
+     * @param y y-coordinate.
+     * @return true if the spawn result is success, false otherwise.
+     */
     private boolean trySetDavyJones(int x, int y) {
         if (trySetEnemy(EnemyCell.DAVY_JONES, x, y)) {
 
@@ -304,25 +502,24 @@ class GameData implements Cloneable {
         return false;
     }
 
-    public void setPath(int x, int y) {
-        matrix.getPoint(x, y).ifPresent(p -> p.setPath(true));
-    }
-
-    public void unsetPath(int x, int y) {
-        matrix.getPoint(x, y).ifPresent(p -> p.setPath(false));
-    }
-
+    /**
+     * Tries to spawn Davy Jones by the given coordinates.
+     *
+     * @param x x-coordinate.
+     * @param y y-coordinate.
+     * @return true if the spawn result is success, false otherwise.
+     */
     public boolean trySetKraken(int x, int y) {
         if (matrix.getPoint(x, y).isPresent()) {
 
             var point = matrix.getPoint(x, y).get();
             var matrixCell = point.getCell();
 
-            var newCell = matrixCell == KrakenPairCell.ROCK
-                    ? KrakenPairCell.KRAKEN_ROCK
-                    : KrakenPairCell.KRAKEN;
+            var newCell = matrixCell == KrakenEnemiesFamilyCell.ROCK
+                    ? KrakenEnemiesFamilyCell.KRAKEN_ROCK
+                    : KrakenEnemiesFamilyCell.KRAKEN;
 
-            if (matrixCell.hasType(KrakenPairCell.class) || matrixCell.isFree()) {
+            if (matrixCell.hasType(KrakenEnemiesFamilyCell.class) || matrixCell.isFree()) {
                 point.setCell(newCell);
                 matrix.neighbors(x, y).forEach(c -> trySetAir(AirCell.PERCEPTION, c.getX(), c.getY()));
                 kraken = matrix.getPoint(x, y).get();
@@ -334,11 +531,15 @@ class GameData implements Cloneable {
         return false;
     }
 
+    /**
+     * Tries to remove Kraken from the map.
+     * Ignores unsuccessful tries (i.e. Kraken is already removed / not spawned).
+     */
     public void tryRemoveKraken() {
         if (kraken == null) return;
 
-        var newCell = kraken.getCell() == KrakenPairCell.KRAKEN_ROCK
-                ? KrakenPairCell.ROCK
+        var newCell = kraken.getCell() == KrakenEnemiesFamilyCell.KRAKEN_ROCK
+                ? KrakenEnemiesFamilyCell.ROCK
                 : AirCell.FREE;
 
         kraken.setCell(newCell);
@@ -354,17 +555,24 @@ class GameData implements Cloneable {
 
     }
 
+    /**
+     * Tries to spawn Rock by the given coordinates.
+     *
+     * @param x x-coordinate.
+     * @param y y-coordinate.
+     * @return true if the spawn result is success, false otherwise.
+     */
     private boolean trySetRock(int x, int y) {
         if (matrix.getPoint(x, y).isPresent()) {
 
             var point = matrix.getPoint(x, y).get();
             var matrixCell = point.getCell();
 
-            var newCell = matrixCell == KrakenPairCell.KRAKEN
-                    ? KrakenPairCell.KRAKEN_ROCK
-                    : KrakenPairCell.ROCK;
+            var newCell = matrixCell == KrakenEnemiesFamilyCell.KRAKEN
+                    ? KrakenEnemiesFamilyCell.KRAKEN_ROCK
+                    : KrakenEnemiesFamilyCell.ROCK;
 
-            if (matrixCell.hasType(KrakenPairCell.class) || matrixCell.isFree()) {
+            if (matrixCell.hasType(KrakenEnemiesFamilyCell.class) || matrixCell.isFree()) {
                 point.setCell(newCell);
                 rock = point;
 
@@ -375,6 +583,13 @@ class GameData implements Cloneable {
         return false;
     }
 
+    /**
+     * Tries to spawn chest by the given coordinates.
+     *
+     * @param x x-coordinate.
+     * @param y y-coordinate.
+     * @return true if the spawn result is success, false otherwise.
+     */
     private boolean trySetChest(int x, int y) {
         if (trySetObject(ObjectCell.CHEST, x, y)) {
 
@@ -387,6 +602,13 @@ class GameData implements Cloneable {
         return false;
     }
 
+    /**
+     * Tries to spawn Tortuga by the given coordinates.
+     *
+     * @param x x-coordinate.
+     * @param y y-coordinate.
+     * @return true if the spawn result is success, false otherwise.
+     */
     private boolean trySetTortuga(int x, int y) {
         if (trySetObject(ObjectCell.TORTUGA, x, y)) {
 
@@ -399,6 +621,33 @@ class GameData implements Cloneable {
         return false;
     }
 
+    /**
+     * Tries to mark the point as "included to the path" by the given coordinates.
+     * Ignores unsuccessful tries
+     *
+     * @param x x-coordinate.
+     * @param y y-coordinate.
+     */
+    public void setPath(int x, int y) {
+        matrix.getPoint(x, y).ifPresent(p -> p.setPath(true));
+    }
+
+    /**
+     * Tries to mark the point as "NOT included to the path" by the given coordinates.
+     * Ignores unsuccessful tries
+     *
+     * @param x x-coordinate.
+     * @param y y-coordinate.
+     */
+    public void unsetPath(int x, int y) {
+        matrix.getPoint(x, y).ifPresent(p -> p.setPath(false));
+    }
+
+    /**
+     * Generates a random integer in the range [0, 8].
+     *
+     * @return random integer in the range [0, 8].
+     */
     private Point getRandomPoint() {
         var optPos = matrix.getPoint(RANDOM.nextInt(0, 9), RANDOM.nextInt(0, 9));
         if (optPos.isEmpty() || (optPos.get().getX() == 0 && optPos.get().getY() != 0))
@@ -406,6 +655,12 @@ class GameData implements Cloneable {
         return optPos.get();
     }
 
+    /**
+     * Generates a sea map with respect to the given points.
+     *
+     * @param points Parsed coordinates from the input.
+     * @throws IllegalArgumentException if any point is incorrect with respect to the game rules.
+     */
     public GameData(List<Point> points) {
         var generationResult = Stream.of(
                 trySetDavyJones(points.get(1).getX(), points.get(1).getY()),
@@ -420,6 +675,10 @@ class GameData implements Cloneable {
             throw new IllegalArgumentException("Failed to spawn game entities!");
     }
 
+    /**
+     * Generates a sea map with random valid coordinates. Jack Sparrow is always spawned
+     * at (0, 0) point.
+     */
     public GameData() {
         var optPoint = matrix.getPoint(0, 0);
 
@@ -497,9 +756,25 @@ class GameData implements Cloneable {
     }
 }
 
+/**
+ * Stores the most successful (during the algorithm execution, not always)
+ * result of algorithm's run from start to target. Nullable.
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ * @see Backtracking
+ * @see AStar
+ * @see OutputHelper
+ */
 class Snapshot {
 
+    /**
+     * Shortest path points from start to target.
+     */
     private List<Point> steps;
+
+    /**
+     * GameData copy.
+     */
     private GameData gameData;
 
     public Snapshot(List<Point> steps, GameData gameData) {
@@ -533,18 +808,55 @@ class Snapshot {
     }
 }
 
+/**
+ * Backtracking algorithm over a sea map. Uses greedy point selection and basic heuristic
+ * as the optimizations.
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ * @see GameData
+ * @see Snapshot
+ * @see Point
+ */
 class Backtracking {
+
+    /**
+     * Current game data during the execution of a partial run from start to target.
+     */
     private GameData gameData;
 
+    /**
+     * Heuristic storage. Heuristic is given as a <code>distanceSquared(target)</code>
+     * for each point.
+     */
     private final int[][] costs = new int[9][9];
+
+    /**
+     * Stores the current snapshot during the execution of a partial run from start to target.
+     */
     private Snapshot currentSnapshot;
 
+    /**
+     * Stores the current path steps during the execution of a partial run from start to target.
+     */
     private final Stack<Point> steps = new Stack<>();
 
+    /**
+     * Target point (Tortuga + Kraken + Chest run or just Chest run)
+     */
     private Point target;
 
+    /**
+     * Stores the minimum steps count over a run from start to target.
+     */
     private int minStepsCount = Integer.MAX_VALUE;
 
+    /**
+     * Returns available moves excluding dangerous (except for Kraken) and previously observed ones
+     * in a list sorted by the distance to the target (greedy approach).
+     *
+     * @param point current point.
+     * @return available moves.
+     */
     private List<Point> moves(Point point) {
         return Stream.concat(
                         gameData.getMatrix().corners(point.getX(), point.getY()),
@@ -555,10 +867,19 @@ class Backtracking {
                 .toList();
     }
 
+    /**
+     * Indicates if the point is dangerous.
+     *
+     * @param point current point.
+     * @return true if the point is dangerous, false otherwise.
+     */
     private boolean isLosing(Point point) {
         return !point.getCell().isSafe();
     }
 
+    /**
+     * Takes the snapshot.
+     */
     private void takeSnapshot() {
         if (currentSnapshot == null || currentSnapshot.getSteps().size() > steps.size())
             currentSnapshot = new Snapshot(new ArrayList<>(steps), gameData.clone());
@@ -568,6 +889,12 @@ class Backtracking {
         }
     }
 
+    /**
+     * Takes the snapshot with the custom data.
+     *
+     * @param steps    custom steps.
+     * @param gameData custom game data.
+     */
     private void takeSnapshot(List<Point> steps, GameData gameData) {
         if (currentSnapshot == null)
             currentSnapshot = new Snapshot(steps, gameData);
@@ -577,6 +904,12 @@ class Backtracking {
         }
     }
 
+    /**
+     * Performs an intermediate backtracking approach for the point and its
+     * available neighbors + corners.
+     *
+     * @param point current point.
+     */
     private void doBacktracking(Point point) {
         if (isLosing(point)) return;
         if (steps.size() + 1 >= minStepsCount) return;
@@ -621,39 +954,47 @@ class Backtracking {
         steps.pop();
     }
 
+    /**
+     * Wraps backtracking run. Sets start and target, replaces game data,
+     * and then restores it after the run. Returns the best snapshot of this run.
+     *
+     * @param start  start point.
+     * @param target target point.
+     * @param data   game data for the run.
+     * @return best snapshot of this run.
+     */
     private Snapshot wrappedRun(Point start, Point target, GameData data) {
         if (start == target) {
             takeSnapshot(new ArrayList<>(), gameData.clone());
-            var snapshotCopy = currentSnapshot;
-            currentSnapshot = null;
+        } else {
+            var tmpGameData = gameData.clone();
+            gameData = data;
 
-            return snapshotCopy;
+            cleanCosts();
+
+            if (isLosing(start)) return null;
+            this.target = target;
+            costs[start.getX()][start.getY()] = 0;
+            var moves = moves(start);
+
+            for (var p : moves)
+                costs[p.getX()][p.getY()] =
+                        Math.min(costs[start.getX()][start.getY()] + 1, costs[p.getX()][p.getY()]);
+
+            gameData.setPath(start.getX(), start.getY());
+
+            for (var p : moves)
+                doBacktracking(p);
+
+            gameData.unsetPath(start.getX(), start.getY());
+            cleanCosts();
+
+            // Force reset minStepsCount for other runs
+            minStepsCount = Integer.MAX_VALUE;
+
+            // Force restore source game data
+            gameData = tmpGameData;
         }
-
-        var tmpGameData = gameData.clone();
-        gameData = data;
-
-        cleanCosts();
-
-        if (isLosing(start)) return null;
-        this.target = target;
-        costs[start.getX()][start.getY()] = 0;
-        var moves = moves(start);
-
-        for (var p : moves)
-            costs[p.getX()][p.getY()] = Math.min(costs[start.getX()][start.getY()] + 1, costs[p.getX()][p.getY()]);
-
-        gameData.setPath(start.getX(), start.getY());
-
-        for (var p : moves)
-            doBacktracking(p);
-
-        gameData.unsetPath(start.getX(), start.getY());
-        cleanCosts();
-
-        // Force reset minStepsCount for other runs
-        minStepsCount = Integer.MAX_VALUE;
-        gameData = tmpGameData;
 
         var snapshotCopy = currentSnapshot;
         currentSnapshot = null;
@@ -661,6 +1002,9 @@ class Backtracking {
         return snapshotCopy;
     }
 
+    /**
+     * Resets heuristic costs.
+     */
     private void cleanCosts() {
         for (int i = 0; i < 9; i++)
             for (int j = 0; j < 9; j++)
@@ -669,11 +1013,17 @@ class Backtracking {
 
     public Backtracking(GameData gameData) {
         this.gameData = gameData;
-
         cleanCosts();
     }
 
-    public void run() {
+    /**
+     * Preforms 2 complete runs and chooses the best one.
+     * <ol>
+     *     <li>start->tortuga + tortuga->kraken + kraken->chest</li>
+     *     <li>start->chest without tortuga</li>
+     * </ol>
+     */
+    public Snapshot run() {
         var initialGameData = gameData.clone();
 
         var firstRun = wrappedRun(gameData.getJackSparrow(), gameData.getTortuga(), initialGameData);
@@ -711,16 +1061,17 @@ class Backtracking {
                 .sorted(Comparator.comparingInt(p -> p.getSteps().size()))
                 .toList();
 
-        if (!result.isEmpty())
-            currentSnapshot = result.get(0);
+        return !result.isEmpty() ? result.get(0) : null;
     }
 
+    /**
+     * Needed for the small optimization in the tests. Allows to replace the game data
+     * for each test avoiding extra creation of Backtracking objects.
+     *
+     * @param gameData custom game data.
+     */
     public void setGameData(GameData gameData) {
         this.gameData = gameData;
-    }
-
-    public Snapshot getCurrentSnapshot() {
-        return currentSnapshot;
     }
 }
 
@@ -818,23 +1169,64 @@ class AStar {
     }
 }
 
+/**
+ * Input helper utility class.
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ * @see GameData
+ * @see AStar
+ */
 class InputHelper {
-    private static final Path INPUT = Path.of("input.txt");
+
+    /**
+     * Input file path.
+     */
+    public static final Path INPUT = Path.of("input.txt");
+
+    /**
+     * Input lines list.
+     */
     private static List<String> inputData;
+
+    /**
+     * List of spawn points used in GameData.
+     *
+     * @see GameData
+     */
     private static List<Point> points;
+
+    /**
+     * Game scenario. Used in AStar.
+     *
+     * @see AStar
+     */
     private static int scenario;
 
+    /**
+     * 9x9 utility matrix. Used as a cache for the points.
+     */
     private static final Matrix MATRIX = new Matrix();
 
+    /**
+     * Parses the inputData.
+     *
+     * @throws IOException if input lines is not equal to 2.
+     */
     private static void parseInput() throws IOException {
-        if (inputData.size() < 2)
-            throw new IOException("Number of input console lines is < 2");
+        if (inputData.size() != 2)
+            throw new IOException("Number of input lines is not equal to 2");
 
-        readPoints();
-        readScenario();
+        parsePoints();
+        parseScenario();
     }
 
-    static void tryInitStreams() throws IOException {
+    /**
+     * Tries to init and parse the reading streams. Accepts input from console and the file.
+     *
+     * @throws IOException if it can't open the streams, given invalid input data, or
+     *                     user selected invalid input way.
+     */
+    public static void tryInitAndParse() throws IOException {
         try (var reader = new BufferedReader(new InputStreamReader(System.in))) {
             System.out.println("Choose the input source:\n[1] File\n[2] Console\nType number:");
 
@@ -853,7 +1245,12 @@ class InputHelper {
         }
     }
 
-    private static void readPoints() throws IOException {
+    /**
+     * Parses and validates the points list.
+     *
+     * @throws IOException if any of the positions is invalid.
+     */
+    private static void parsePoints() throws IOException {
         points = Arrays.stream(inputData.get(0).split("\\s+"))
                 .filter(x -> x.matches("\\[[0-8],[0-8]]"))
                 .map(x -> {
@@ -868,7 +1265,12 @@ class InputHelper {
             throw new IOException("Invalid positions");
     }
 
-    private static void readScenario() throws IOException {
+    /**
+     * Parses and validates the game scenario.
+     *
+     * @throws IOException if scenario is invalid.
+     */
+    private static void parseScenario() throws IOException {
         scenario = Integer.parseInt(inputData.get(1));
         if (scenario != 1 && scenario != 2)
             throw new IOException("Invalid scenario");
@@ -883,44 +1285,107 @@ class InputHelper {
     }
 }
 
+/**
+ * Output helper utility class.
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ * @see Snapshot
+ */
 class OutputHelper {
 
+    /**
+     * Backtracking output file path.
+     *
+     * @see Backtracking
+     */
+    public static final Path BACKTRACKING_OUT = Path.of("outputBacktracking.txt");
+
+    /**
+     * AStar output file path.
+     *
+     * @see AStar
+     */
+    public static final Path A_STAR_OUT = Path.of("outputAStar.txt");
+
+    /**
+     * Writes the given nullable snapshot (null = lose) to the given output file.
+     *
+     * @param outputPath output file path.
+     * @param snapshot   nullable snapshot.
+     * @param millis     algorithm execution time in milliseconds.
+     * @throws IOException if given an output file which is not defined in this class, or default cases of IOException.
+     */
     static void printResult(Path outputPath, Snapshot snapshot, long millis) throws IOException {
+        if (!outputPath.equals(BACKTRACKING_OUT) || !outputPath.equals(A_STAR_OUT))
+            throw new IOException("Invalid output file path!");
+
         if (snapshot == null) Files.writeString(outputPath, "Lose\n");
         else Files.writeString(outputPath, String.format("Win\n%s\n%d ms\n", snapshot, millis));
     }
-
-    static void printResult(Snapshot snapshot, long millis) {
-        if (snapshot == null) System.out.println("Lose");
-        else System.out.printf("Win\n%s\n%d ms\n", snapshot, millis);
-    }
 }
 
+/**
+ * Test time result record.
+ *
+ * @param allTimeResults time results for all tests.
+ * @param mean           average time result.
+ * @param median         median time result.
+ * @param mode           mode time result.
+ * @param sDeviation     standard deviation.
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ * @see TestHelper
+ * @see Backtracking
+ * @see AStar
+ */
 record TestResult(
         List<Long> allTimeResults,
-        long max, long min,
-        double mean, double median,
-        double variance, double sDeviation
+        double mean, double median, long mode,
+        double sDeviation
 ) {
     @Override
     public String toString() {
-        return "max = " + max + "\n" +
-                "min = " + min + "\n" +
-                "mean = " + mean + "\n" +
+        return "mean = " + mean + "\n" +
                 "median = " + median + "\n" +
-                "variance = " + variance + "\n" +
+                "mode = " + mode + "\n" +
                 "sDeviation = " + sDeviation;
     }
 }
 
+/**
+ * Tests helper utility class.
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ * @see GameData
+ * @see AStar
+ */
 class TestHelper {
+
+    /**
+     * Backtracking option.
+     */
     public static final int BACKTRACKING = 0;
+
+    /**
+     * AStar option.
+     */
     public static final int A_STAR = 1;
 
+    /**
+     * Returns mean of tests results.
+     *
+     * @param results list of tests results.
+     * @return mean of tests results.
+     */
     private static double mean(List<Long> results) {
         return results.stream().mapToDouble(Long::doubleValue).sum() / results.size();
     }
 
+    /**
+     * Returns median of tests results.
+     *
+     * @param results list of tests results.
+     * @return median of tests results.
+     */
     private static double median(List<Long> results) {
         results.sort(Comparator.comparingInt(Long::intValue));
 
@@ -929,27 +1394,56 @@ class TestHelper {
                 : results.get(results.size() / 2) / 2d;
     }
 
+    /**
+     * Returns mode of tests results.
+     *
+     * @param results list of tests results.
+     * @return mode of tests results.
+     */
+    private static long mode(List<Long> results) {
+        var maxFrequency = 0;
+        var mode = -1L;
+
+        for (var r : results) {
+            var frequency = Collections.frequency(results, r);
+            if (frequency > maxFrequency) {
+                maxFrequency = frequency;
+                mode = r;
+            }
+        }
+
+        return mode;
+    }
+
+    /**
+     * Returns variance of tests results.
+     *
+     * @param results list of tests results.
+     * @return variance of tests results.
+     */
     private static double variance(List<Long> results) {
         var mean = mean(results);
         return results.stream().mapToDouble(x -> Math.pow(x - mean, 2)).sum() / (results.size() - 1);
     }
 
+    /**
+     * Returns standard deviation of tests results.
+     *
+     * @param results list of tests results.
+     * @return standard deviation of tests results.
+     */
     private static double sDeviation(List<Long> results) {
         return Math.sqrt(variance(results));
     }
 
-    private static long min(List<Long> results) {
-        var result = results.stream().mapToLong(x -> x).min();
-        if (result.isEmpty()) throw new RuntimeException("Illegal result of min()");
-        return result.getAsLong();
-    }
-
-    private static long max(List<Long> results) {
-        var result = results.stream().mapToLong(x -> x).max();
-        if (result.isEmpty()) throw new RuntimeException("Illegal result of min()");
-        return result.getAsLong();
-    }
-
+    /**
+     * Generates and runs <code>repeatNumber</code> tests and returns the results
+     * as a TestResult record
+     *
+     * @param repeatNumber number of generated random tests.
+     * @param algorithm algorithm option.
+     * @return TestResult record.
+     */
     public static TestResult run(int repeatNumber, int algorithm) {
         var results = new ArrayList<Long>(repeatNumber);
         long startMillis, endMillis;
@@ -976,9 +1470,9 @@ class TestHelper {
 
         return new TestResult(
                 results,
-                max(results), min(results),
                 mean(results), median(results),
-                variance(results), sDeviation(results)
+                mode(results),
+                sDeviation(results)
         );
     }
 }
