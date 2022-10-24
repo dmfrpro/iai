@@ -1473,9 +1473,10 @@ class Backtracking {
 //}
 
 class AStar {
-    private static class Node implements Comparable<Node> {
+    private class Node implements Comparable<Node> {
         Node parent;
         Point point;
+
 
         int cost = 0;
 
@@ -1489,17 +1490,31 @@ class AStar {
 
         @Override
         public int compareTo(Node o) {
-            return cost - o.cost;
+
+            var h = Math.max(
+                    Math.abs(point.getX() - target.point.getX()),
+                    Math.abs(point.getY() - target.point.getY())
+            );
+
+            var oh = Math.max(
+                    Math.abs(o.point.getX() - target.point.getX()),
+                    Math.abs(o.point.getY() - target.point.getY())
+            );
+
+            var g = parent != null ? parent.cost + 1 : 0;
+            var og = o.parent != null ? o.parent.cost + 1 : 0;
+
+            return (h + g) - (oh + og);
         }
     }
+
+    private Node target;
 
     private GameData gameData;
 
     private final int scenario;
 
     private final Node[][] nodes = new Node[9][9];
-
-    private final Node[][] parentMatrix = new Node[9][9];
 
     private final Queue<Node> open = new PriorityQueue<>();
 
@@ -1528,9 +1543,6 @@ class AStar {
             for (int x = 0; x < 9; x++)
                 if (gameData.getMatrix().getPoint(x, y).isPresent())
                     nodes[x][y] = new Node(gameData.getMatrix().getPoint(x, y).get());
-
-        for (int i = 0; i < 9; i++)
-            parentMatrix[i] = new Node[9];
     }
 
     private List<Node> moves(Node node) {
@@ -1538,8 +1550,7 @@ class AStar {
                 gameData.getMatrix().neighbors(node.point.getX(), node.point.getY()),
                 gameData.getMatrix().corners(node.point.getX(), node.point.getY())
         )
-                .filter(p -> !closed.contains(getNode(p)))
-                .filter(p -> p.getCell().isSafe())
+                .filter(p -> !closed.contains(getNode(p)) && p.getCell().isSafe())
                 .map(this::getNode)
                 .toList();
     }
@@ -1565,7 +1576,7 @@ class AStar {
 
                 closed.add(n);
 
-                break;
+//                break;
             }
 
             closed.add(current);
@@ -1604,6 +1615,8 @@ class AStar {
     }
 
     private Snapshot wrappedRun(Point start, Point target, GameData data) {
+        this.target = getNode(target);
+
         if (start == target) {
             takeSnapshot(new ArrayList<>(), gameData.clone());
             var snapshotCopy = currentSnapshot;
@@ -1631,12 +1644,14 @@ class AStar {
 
         gameData.setPath(start.getX(), start.getY());
 
+        var stepsList = new ArrayList<>(steps);
+
         while (!steps.isEmpty()) {
             var p = steps.pop();
             gameData.setPath(p.getX(), p.getY());
         }
 
-        takeSnapshot();
+        takeSnapshot(stepsList, gameData.clone());
 //        cleanCosts();
 //        if (isLosing(start)) return null;
 //
