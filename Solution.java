@@ -33,6 +33,15 @@ public class Solution {
                         System.currentTimeMillis() - startMillis
                 );
 
+                var aStar = new AStar(game.clone(), scenario);
+                aStar.run();
+
+                OutputHelper.printResult(
+                        OutputHelper.A_STAR_OUT,
+                        aStar.getCurrentSnapshot(),
+                        System.currentTimeMillis() - startMillis
+                );
+
             } else if (args[0].equals("-t") || args[0].equals("--test")) {
 
                 System.out.printf(
@@ -873,7 +882,7 @@ class Backtracking {
      * Returns squared euclidean distance from the given point to target.
      *
      * @param point comparator point value.
-     * @return quared euclidean distance from the given point to target.
+     * @return squared euclidean distance from the given point to target.
      */
     private int distanceSquared(Point point) {
         return (int) (Math.pow(point.getX() - target.getX(), 2) + Math.pow(point.getY() - target.getY(), 2));
@@ -999,7 +1008,7 @@ class Backtracking {
             doBacktracking(p);
 
         gameData.unsetPath(start.getX(), start.getY());
-        costs[start.getX()][start.getY()] = Integer.MAX_VALUE; // TODO
+        costs[start.getX()][start.getY()] = Integer.MAX_VALUE;
 
         cleanCosts();
 
@@ -1103,84 +1112,409 @@ class Backtracking {
     }
 }
 
+
+//class AStar {
+//    private static class Node {
+//        Point point;
+////        Node parent;
+//
+//        boolean finalized = false;
+////        boolean connected = false;
+//
+//        int g = Integer.MAX_VALUE;
+//        int f = Integer.MAX_VALUE;
+//        int h = Integer.MAX_VALUE;
+//
+//        Node(Point point) {
+//            this.point = point;
+//        }
+//
+//        @Override
+//        public String toString() {
+//            return String.format("(%2d %2d %2d)%s", f == Integer.MAX_VALUE ? -1 : f, g, h == Integer.MAX_VALUE ? -1 : h, point);
+//        }
+//    }
+//
+//    private final Node[][] nodes = new Node[9][9];
+//
+////    private final List<Node> checkedList = new LinkedList<>();
+//
+//    private Set<Node> checkedSet = new HashSet<>();
+//    private final List<Node> finalSet = new LinkedList<>();
+//
+//    private final List<Point> steps = new LinkedList<>();
+//
+////    private final List<Node> addedList = new LinkedList<>();
+//
+//    private final int scenario;
+//
+//    private GameData gameData;
+//
+//    private Snapshot currentSnapshot = null;
+//
+//    private Point target;
+//
+//    private Node currentParent;
+//
+//    private int order = 1;
+//
+////    private Node currentNode;
+//
+////    private boolean ended = false;
+////    private boolean failed = false;
+//
+//    /**
+//     * Takes the snapshot.
+//     */
+//    private void takeSnapshot() {
+//        if (currentSnapshot == null || currentSnapshot.getSteps().size() > steps.size())
+//            currentSnapshot = new Snapshot(new ArrayList<>(steps), gameData.clone());
+//        else {
+//            currentSnapshot.setSteps(steps);
+//            currentSnapshot.setGameData(gameData);
+//        }
+//    }
+//
+//    /**
+//     * Takes the snapshot with the custom data.
+//     *
+//     * @param steps    custom steps.
+//     * @param gameData custom game data.
+//     */
+//    private void takeSnapshot(List<Point> steps, GameData gameData) {
+//        if (currentSnapshot == null)
+//            currentSnapshot = new Snapshot(steps, gameData);
+//        else {
+//            currentSnapshot.setSteps(steps);
+//            currentSnapshot.setGameData(gameData);
+//        }
+//    }
+//
+//    private List<Node> moves(Node node) {
+//        if (node.f == Integer.MAX_VALUE)
+//            return new ArrayList<>();
+//
+//        return Stream.concat(
+//                        gameData.getMatrix().neighbors(node.point.getX(), node.point.getY()),
+//                        gameData.getMatrix().corners(node.point.getX(), node.point.getY())
+//                )
+//                .filter(p -> p.getCell().isSafe())
+//                .map(this::getNode)
+//                .filter(n -> n.g == Integer.MAX_VALUE)
+//                .toList();
+//    }
+//
+//    private List<Node> secondNeighbors(Node node) {
+//        return gameData.getMatrix().secondNeighbors(node.point.getX(), node.point.getY())
+//                .filter(p -> p.getCell().isSafe())
+//                .map(this::getNode)
+//                .filter(n -> n.g == Integer.MAX_VALUE)
+//                .toList();
+//    }
+//
+//    private void cleanNodes() {
+//        for (int y = 0; y < 9; y++)
+//            for (int x = 0; x < 9; x++) {
+//                nodes[x][y].f = Integer.MAX_VALUE;
+//                nodes[x][y].h = Integer.MAX_VALUE;
+//            }
+//    }
+//
+//    private void printNodes() {
+//        for (int y = 0; y < 9; y++) {
+//            for (int x = 0; x < 9; x++) {
+//                System.out.print((nodes[x][y] + "   "));
+//            }
+//            System.out.println();
+//        }
+//
+//        System.out.println();
+//    }
+//
+//    private Node getNode(Point point) {
+//        return nodes[point.getX()][point.getY()];
+//    }
+//
+//    private void updateHeuristics(Node node) {
+//        if (finalSet.contains(node)) return;
+//        if (node.f != Integer.MAX_VALUE) return;
+//
+////        var parent = checkedSet.stream()
+//////                .filter(n -> n.h == node.h + 1)
+////                .sorted(Comparator.comparingInt(n -> n.f))
+////                .filter(n -> n.g <= node.g && !n.point.equals(node.point))
+////                .reduce((first, second) -> first);
+//
+//        var parent = Optional.of(currentParent);
+//
+//        node.g = parent.get().g + 1;
+//
+//        node.h = Math.max(
+//                Math.abs(node.point.getX() - target.getX()),
+//                Math.abs(node.point.getY() - target.getY())
+//        );
+//
+//        node.f = node.g + node.h;
+//    }
+//
+//    private void tryUpdateParent() {
+//
+//        Comparator<Node> cmp = (n1, n2) -> {
+//            if (n1.f == n2.f)
+//                return n1.h - n2.h;
+//            else
+//                return n1.f - n2.f;
+//        };
+//
+//        var listNodes = checkedSet.stream()
+////                .filter(n -> {
+////                    var point = n.point;
+//
+////                    return Stream.concat(
+////                            gameData.getMatrix().neighbors(point.getX(), point.getY()),
+////                            gameData.getMatrix().neighbors(point.getX(), point.getY())
+////                    ).anyMatch(p -> p.equals(finalSet.get(finalSet.size() - 1).point));
+////                })
+//                .filter(n -> n.g == order + 1)
+////                .filter(n -> n.f != Integer.MAX_VALUE)
+////                .filter(n -> n.g + 1 == currentParent.g)
+//                .sorted(cmp)
+//                .toList();
+//
+//        for (Node listNode : listNodes) {
+//            if (gameData.getMatrix().neighbors(listNode.point.getX(), listNode.point.getY()).noneMatch(p -> p.equals(currentParent.point))) {
+//                currentParent = listNode;
+//                break;
+//            }
+//            else if (gameData.getMatrix().corners(listNode.point.getX(), listNode.point.getY()).noneMatch(p -> p.equals(currentParent.point))) {
+//                currentParent = listNode;
+//                break;
+//            }
+//        }
+//
+//
+////        listNodes.ifPresent(value -> currentParent = value);
+//
+////        if (finalSet.contains(node)) return;
+////
+//////        var parent = finalSet.stream()
+////////                .filter(n -> n.h == node.h + 1)
+//////                .sorted(Comparator.comparingInt(n -> n.g))
+//////                .filter(n -> n.g <= node.g && !n.point.equals(node.point))
+//////                .reduce((first, second) -> first);
+////
+//////        var parent = finalSet.stream()
+//////                .filter(n -> n.g <= node.g && !n.point.equals(node.point))
+//////                .filter(n -> n.connected && !n.finalized)
+//////                .reduce((first, second) -> first);
+////
+////        var parent = Optional.of(currentParent);
+////
+////        if (parent.isPresent()) {
+//////            if (!parent.get().finalized) {
+////                node.parent = parent.get();
+////                node.parent.finalized = true;
+////
+////                node.connected = true;
+////                currentParent = node;
+////
+//////                checkedSet.remove(node.parent);
+//////                finalSet.add(node.parent);
+//////            }
+////        } else {
+////            currentParent = node;
+////        }
+//    }
+//
+//    private boolean isLosing(Point point) {
+//        return gameData.getMatrix().getPoint(point.getX(), point.getY()).isEmpty() || !point.getCell().isSafe();
+//    }
+//
+//    private void doAStar(Node start) {
+////        if (ended) return;
+//
+//        checkedSet.add(start);
+//        finalSet.add(start);
+//
+//
+////        int order = 1;
+//        main:
+//        while (!checkedSet.isEmpty()) {
+//
+//            Set<Node> newCheckedSet = new HashSet<>(checkedSet);
+//            for (var n : checkedSet) {
+//                var moves = moves(n);
+//                newCheckedSet.addAll(moves);
+//            }
+//
+////            checkedSet = newCheckedSet;
+//            newCheckedSet = newCheckedSet.stream()
+//                    .filter(n -> n.point.getCell().isSafe())
+//                    .collect(Collectors.toSet());
+//
+//            checkedSet = newCheckedSet;
+//
+//            for (var n : checkedSet) {
+//                updateHeuristics(n);
+////                tryUpdateParent(n);
+//            }
+//
+//            tryUpdateParent();
+//
+//            printNodes();
+//            System.out.println(finalSet);
+//
+//            if (scenario == 2)
+//                for (var n : checkedSet) {
+//                    checkedSet.addAll(moves(n));
+//                    updateHeuristics(n);
+//                }
+//
+//
+//            //                    finalSet.add(node);
+////            checkedSet.removeIf(node -> node.g < currentParent.g);
+//
+//            final int orderCopy = order;
+//            checkedSet.removeIf(node -> node.g <= orderCopy);
+//            ++order;
+//
+//            finalSet.add(currentParent);
+//
+////            if (finalSet.size() > 1) {
+////                if (finalSet.get(finalSet.size() - 1).point.equals(finalSet.get(finalSet.size() - 2).point)) {
+////                    break main;
+////                }
+////            }
+//        }
+//
+//        if (getNode(target).f != Integer.MAX_VALUE) {
+////            var currentNode = getNode(target);
+//
+//            for (var p : finalSet) {
+//                gameData.setPath(p.point.getX(), p.point.getY());
+//                steps.add(p.point);
+//            }
+//
+//////            for (; currentNode != null; currentNode = currentNode.parent) {
+////                gameData.setPath(currentNode.point.getX(), currentNode.point.getY());
+////                steps.add(currentNode.point);
+////            }
+//
+////            Collections.reverse(steps);
+//
+//            takeSnapshot();
+//        }
+//
+////        checkedList.add(node);
+//    }
+//
+//    private void wrappedAStar(Point start, Point target) {
+//        this.target = target;
+//        cleanNodes();
+//
+//        for (int y = 0; y < 9; y++)
+//            for (int x = 0; x < 9; x++) {
+//                var optPoint = gameData.getMatrix().getPoint(x, y);
+//
+//                if (optPoint.isPresent()) {
+//                    var node = getNode(optPoint.get());
+//
+//                    if (x == start.getX() && y == start.getY()) {
+//                        node.g = 1;
+//
+//                        node.h = Math.max(
+//                                Math.abs(node.point.getX() - target.getX()),
+//                                Math.abs(node.point.getY() - target.getY())
+//                        );
+//
+//                        node.f = node.g + node.h;
+//
+////                        node.connected = true;
+////                        node.finalized = true;
+//
+//                        currentParent = node;
+//                    }
+//
+////                    checkedSet.add(node);
+//                }
+//            }
+//
+//        printNodes();
+//
+//        doAStar(getNode(start));
+//    }
+//
+//    public AStar(GameData gameData, int scenario) {
+//        this.gameData = gameData;
+//        this.scenario = scenario;
+//
+//        for (int i = 0; i < 9; i++)
+//            nodes[i] = new Node[9];
+//
+//        for (int y = 0; y < 9; y++)
+//            for (int x = 0; x < 9; x++)
+//                if (gameData.getMatrix().getPoint(x, y).isPresent())
+//                    nodes[x][y] = new Node(gameData.getMatrix().getPoint(x, y).get());
+//    }
+//
+//    public void run() {
+//        wrappedAStar(gameData.getJackSparrow(), gameData.getChest());
+//
+//        System.out.println(currentSnapshot);
+//    }
+//
+//    public Snapshot getCurrentSnapshot() {
+//        return currentSnapshot;
+//    }
+//
+//    public void setGameData(GameData gameData) {
+//        this.gameData = gameData;
+//    }
+//}
+
 class AStar {
-    private static class Node {
+    private static class Node implements Comparable<Node> {
         Node parent;
         Point point;
 
-        int g = 1;
-        int f = Integer.MAX_VALUE;
-        int h = Integer.MAX_VALUE;
+        int cost = 0;
 
-        int length = 0;
+//        int f = 0;
+//        int g = 0;
+//        int h = 0;
 
-        boolean checked = false;
-        boolean added = false;
-
-        Node(Node parent, Point point) {
-            this.parent = parent;
+        public Node(Point point) {
             this.point = point;
         }
 
-        void reset() {
-            parent = null;
-            f = Integer.MAX_VALUE;
-            g = 1;
-            h = Integer.MAX_VALUE;
-            checked = false;
-            added = false;
+        @Override
+        public int compareTo(Node o) {
+            return cost - o.cost;
         }
     }
 
-    private final Node[][] nodes = new Node[9][9];
-
-    private final List<Node> checkedList = new LinkedList<>();
-    private final List<Node> addedList = new LinkedList<>();
+    private GameData gameData;
 
     private final int scenario;
 
-    private final GameData gameData;
+    private final Node[][] nodes = new Node[9][9];
 
-    private Point target;
+    private final Node[][] parentMatrix = new Node[9][9];
 
-    private Node currentNode;
+    private final Queue<Node> open = new PriorityQueue<>();
 
-    private boolean ended = false;
-    private boolean failed = false;
+    private final Set<Node> closed = new HashSet<>();
 
-    private void cleanNodes() {
-        for (int y = 0; y < 9; y++)
-            for (int x = 0; x < 9; x++)
-                nodes[x][y].reset();
+    private final Stack<Point> steps = new Stack<>();
+
+    private Snapshot currentSnapshot;
+
+    public Snapshot getCurrentSnapshot() {
+        return currentSnapshot;
     }
 
-    private void updateHeuristics(Node node) {
-        if (node.checked || node.added) return;
-
-        node.g = node.length + 1;
-        node.h = Math.max(
-                Math.abs(node.point.getX() - target.getX()),
-                Math.abs(node.point.getY() - target.getY())
-        );
-        node.f = node.g + node.h;
-    }
-
-    private boolean isLosing(Point point) {
-        return gameData.getMatrix().getPoint(point.getX(), point.getY()).isEmpty() || !point.getCell().isSafe();
-    }
-
-    private void doAStar(Node node) {
-        if (ended) return;
-
-        node.checked = true;
-        checkedList.add(node);
-    }
-
-    private void wrappedAStar(Point start, Point target) {
-        this.target = target;
-        cleanNodes();
-
-        doAStar(nodes[start.getX()][start.getY()]);
+    private Node getNode(Point point) {
+        return nodes[point.getX()][point.getY()];
     }
 
     public AStar(GameData gameData, int scenario) {
@@ -1193,9 +1527,152 @@ class AStar {
         for (int y = 0; y < 9; y++)
             for (int x = 0; x < 9; x++)
                 if (gameData.getMatrix().getPoint(x, y).isPresent())
-                    nodes[x][y] = new Node(null, gameData.getMatrix().getPoint(x, y).get());
+                    nodes[x][y] = new Node(gameData.getMatrix().getPoint(x, y).get());
+
+        for (int i = 0; i < 9; i++)
+            parentMatrix[i] = new Node[9];
+    }
+
+    private List<Node> moves(Node node) {
+        return Stream.concat(
+                gameData.getMatrix().neighbors(node.point.getX(), node.point.getY()),
+                gameData.getMatrix().corners(node.point.getX(), node.point.getY())
+        )
+                .filter(p -> !closed.contains(getNode(p)))
+                .filter(p -> p.getCell().isSafe())
+                .map(this::getNode)
+                .toList();
+    }
+
+    private void doRun(Node start) {
+        open.offer(start);
+
+        while (!open.isEmpty()) {
+
+            var current = open.poll();
+
+            for (var n : moves(current)) {
+                if (!open.contains(n)) {
+                    n.cost = current.cost + 1;
+                    n.parent = current;
+                    open.offer(n);
+                } else {
+                    if (current.cost + 1 < n.cost) {
+                        n.cost = current.cost + 1;
+                        n.parent = current;
+                    }
+                }
+
+                closed.add(n);
+
+                break;
+            }
+
+            closed.add(current);
+        }
+    }
+
+    /**
+     * Takes the snapshot.
+     */
+    private void takeSnapshot() {
+        if (currentSnapshot == null || currentSnapshot.getSteps().size() > steps.size())
+            currentSnapshot = new Snapshot(new ArrayList<>(steps), gameData.clone());
+        else {
+            currentSnapshot.setSteps(steps);
+            currentSnapshot.setGameData(gameData);
+        }
+    }
+
+    /**
+     * Takes the snapshot with the custom data.
+     *
+     * @param steps    custom steps.
+     * @param gameData custom game data.
+     */
+    private void takeSnapshot(List<Point> steps, GameData gameData) {
+        if (currentSnapshot == null)
+            currentSnapshot = new Snapshot(steps, gameData);
+        else {
+            currentSnapshot.setSteps(steps);
+            currentSnapshot.setGameData(gameData);
+        }
+    }
+
+    private boolean isLosing(Point point) {
+        return gameData.getMatrix().getPoint(point.getX(), point.getY()).isEmpty() || !point.getCell().isSafe();
+    }
+
+    private Snapshot wrappedRun(Point start, Point target, GameData data) {
+        if (start == target) {
+            takeSnapshot(new ArrayList<>(), gameData.clone());
+            var snapshotCopy = currentSnapshot;
+            currentSnapshot = null;
+
+            return snapshotCopy;
+        }
+
+        steps.clear();
+
+        if (isLosing(start)) return null;
+
+        var tmpGameData = gameData.clone();
+        gameData = data;
+
+        doRun(getNode(start));
+
+        var current = getNode(target);
+
+        if (!closed.contains(getNode(target))) return null;
+
+        for (; !current.point.equals(getNode(start).point); current = current.parent) {
+            steps.push(current.point);
+        }
+
+        gameData.setPath(start.getX(), start.getY());
+
+        while (!steps.isEmpty()) {
+            var p = steps.pop();
+            gameData.setPath(p.getX(), p.getY());
+        }
+
+        takeSnapshot();
+//        cleanCosts();
+//        if (isLosing(start)) return null;
+//
+//        this.target = target;
+//        costs[start.getX()][start.getY()] = 0;
+//
+//        var moves = moves(start);
+//
+//        updateNeighborCosts(start);
+//
+//        gameData.setPath(start.getX(), start.getY());
+//
+//        for (var p : moves)
+//            doBacktracking(p);
+//
+//        gameData.unsetPath(start.getX(), start.getY());
+//        costs[start.getX()][start.getY()] = Integer.MAX_VALUE;
+//
+//        cleanCosts();
+//
+//        // Force reset minStepsCount for other runs
+//        minStepsCount = Integer.MAX_VALUE;
+//        gameData = tmpGameData;
+
+        gameData = tmpGameData;
+        var snapshotCopy = currentSnapshot;
+        currentSnapshot = null;
+
+        return snapshotCopy;
+    }
+
+    public void run() {
+        currentSnapshot = wrappedRun(gameData.getJackSparrow(), gameData.getChest(), gameData);
     }
 }
+
 
 /**
  * Input helper utility class.
@@ -1466,8 +1943,8 @@ class TestHelper {
      * as a TestResult record
      *
      * @param repeatNumber number of generated random tests.
-     * @param algorithm algorithm option.
-     * @param scenario game scenario.
+     * @param algorithm    algorithm option.
+     * @param scenario     game scenario.
      * @return TestResult record.
      */
     public static TestResult run(int repeatNumber, int algorithm, int scenario) {
