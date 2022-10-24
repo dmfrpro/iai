@@ -1287,29 +1287,6 @@ class AStar {
         }
 
         takeSnapshot(stepsList, gameData.clone());
-//        cleanCosts();
-//        if (isLosing(start)) return null;
-//
-//        this.target = target;
-//        costs[start.getX()][start.getY()] = 0;
-//
-//        var moves = moves(start);
-//
-//        updateNeighborCosts(start);
-//
-//        gameData.setPath(start.getX(), start.getY());
-//
-//        for (var p : moves)
-//            doBacktracking(p);
-//
-//        gameData.unsetPath(start.getX(), start.getY());
-//        costs[start.getX()][start.getY()] = Integer.MAX_VALUE;
-//
-//        cleanCosts();
-//
-//        // Force reset minStepsCount for other runs
-//        minStepsCount = Integer.MAX_VALUE;
-//        gameData = tmpGameData;
 
         gameData = tmpGameData;
         var snapshotCopy = currentSnapshot;
