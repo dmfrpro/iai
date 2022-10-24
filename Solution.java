@@ -163,7 +163,7 @@ class Matrix implements Cloneable {
     }
 }
 
-abstract class AbstractPoint implements Cloneable {
+class Point implements Cloneable {
     private final int x;
 
     private final int y;
@@ -172,9 +172,13 @@ abstract class AbstractPoint implements Cloneable {
 
     private Cell cell = AirCell.FREE;
 
-    public AbstractPoint(int x, int y) {
+    public Point(int x, int y) {
         this.x = x;
         this.y = y;
+    }
+
+    public int distanceSquared(Point point) {
+        return (int) (Math.pow(point.getX() - getX(), 2) + Math.pow(point.getY() - getY(), 2));
     }
 
     public int getX() {
@@ -216,7 +220,7 @@ abstract class AbstractPoint implements Cloneable {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        var point = (AbstractPoint) o;
+        var point = (Point) o;
         return x == point.x && y == point.y;
     }
 
@@ -228,17 +232,6 @@ abstract class AbstractPoint implements Cloneable {
     @Override
     public String toString() {
         return String.format("[%d,%d]", getX(), getY());
-    }
-}
-
-class Point extends AbstractPoint {
-
-    public Point(int x, int y) {
-        super(x, y);
-    }
-
-    public int distanceSquared(Point point) {
-        return (int) (Math.pow(point.getX() - getX(), 2) + Math.pow(point.getY() - getY(), 2));
     }
 }
 
@@ -767,6 +760,8 @@ class InputHelper {
             }
 
             parseInput();
+        } catch (NumberFormatException e) {
+            throw new IOException("Can't parse the given string to an integer");
         }
     }
 
