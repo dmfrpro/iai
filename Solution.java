@@ -25,10 +25,11 @@ public class Solution {
                 var backtracking = new Backtracking(game);
 
                 var startMillis = System.currentTimeMillis();
+                backtracking.run();
 
                 OutputHelper.printResult(
                         OutputHelper.BACKTRACKING_OUT,
-                        backtracking.run(),
+                        backtracking.getCurrentSnapshot(),
                         System.currentTimeMillis() - startMillis
                 );
 
@@ -36,9 +37,8 @@ public class Solution {
 
                 System.out.printf(
                         "Backtracking test results:\n%s\n",
-                        TestHelper.run(1000, TestHelper.BACKTRACKING)
+                        TestHelper.run(1000, TestHelper.BACKTRACKING, 1)
                 );
-
             }
         } catch (Exception e) {
             System.out.println(e.getMessage());
@@ -851,7 +851,8 @@ class Backtracking {
     private int minStepsCount = Integer.MAX_VALUE;
 
     /**
-     * Returns available moves excluding dangerous (except for Kraken) and previously observed ones
+     * Returns available moves excluding dangerous (except for Kraken), previously observed ones,
+     * and those which have less cost than computed current;
      * in a list sorted by the distance to the target (greedy approach).
      *
      * @param point current point.
@@ -864,7 +865,18 @@ class Backtracking {
                 )
                 .filter(p -> p.getCell().isKraken() || p.getCell().isSafe())
                 .filter(p -> costs[p.getX()][p.getY()] >= steps.size())
+                .sorted((p1, p2) -> distanceSquared(p1) - distanceSquared(p2))
                 .toList();
+    }
+
+    /**
+     * Returns squared euclidean distance from the given point to target.
+     *
+     * @param point comparator point value.
+     * @return quared euclidean distance from the given point to target.
+     */
+    private int distanceSquared(Point point) {
+        return (int) (Math.pow(point.getX() - target.getX(), 2) + Math.pow(point.getY() - target.getY(), 2));
     }
 
     /**
@@ -914,8 +926,6 @@ class Backtracking {
         if (isLosing(point)) return;
         if (steps.size() + 1 >= minStepsCount) return;
 
-        if (costs[point.getX()][point.getY()] < steps.size()) return;
-
         steps.push(point);
 
         gameData.setPath(point.getX(), point.getY());
@@ -942,12 +952,10 @@ class Backtracking {
 
         } else {
 
-            for (var p : moves)
-                costs[p.getX()][p.getY()] = Math.min(costs[point.getX()][point.getY()] + 1, costs[p.getX()][p.getY()]);
+            updateNeighborCosts(point);
 
-            for (var p : moves) {
+            for (var p : moves)
                 doBacktracking(p);
-            }
         }
 
         gameData.unsetPath(point.getX(), point.getY());
@@ -966,35 +974,38 @@ class Backtracking {
     private Snapshot wrappedRun(Point start, Point target, GameData data) {
         if (start == target) {
             takeSnapshot(new ArrayList<>(), gameData.clone());
-        } else {
-            var tmpGameData = gameData.clone();
-            gameData = data;
+            var snapshotCopy = currentSnapshot;
+            currentSnapshot = null;
 
-            cleanCosts();
-
-            if (isLosing(start)) return null;
-            this.target = target;
-            costs[start.getX()][start.getY()] = 0;
-            var moves = moves(start);
-
-            for (var p : moves)
-                costs[p.getX()][p.getY()] =
-                        Math.min(costs[start.getX()][start.getY()] + 1, costs[p.getX()][p.getY()]);
-
-            gameData.setPath(start.getX(), start.getY());
-
-            for (var p : moves)
-                doBacktracking(p);
-
-            gameData.unsetPath(start.getX(), start.getY());
-            cleanCosts();
-
-            // Force reset minStepsCount for other runs
-            minStepsCount = Integer.MAX_VALUE;
-
-            // Force restore source game data
-            gameData = tmpGameData;
+            return snapshotCopy;
         }
+
+        var tmpGameData = gameData.clone();
+        gameData = data;
+
+        cleanCosts();
+        if (isLosing(start)) return null;
+
+        this.target = target;
+        costs[start.getX()][start.getY()] = 0;
+
+        var moves = moves(start);
+
+        updateNeighborCosts(start);
+
+        gameData.setPath(start.getX(), start.getY());
+
+        for (var p : moves)
+            doBacktracking(p);
+
+        gameData.unsetPath(start.getX(), start.getY());
+        costs[start.getX()][start.getY()] = Integer.MAX_VALUE; // TODO
+
+        cleanCosts();
+
+        // Force reset minStepsCount for other runs
+        minStepsCount = Integer.MAX_VALUE;
+        gameData = tmpGameData;
 
         var snapshotCopy = currentSnapshot;
         currentSnapshot = null;
@@ -1011,6 +1022,18 @@ class Backtracking {
                 costs[i][j] = Integer.MAX_VALUE;
     }
 
+    /**
+     * Updates the heuristic values for the point's neighbors.
+     *
+     * @param point current point.
+     */
+    private void updateNeighborCosts(Point point) {
+        var pointCost = costs[point.getX()][point.getY()];
+
+        for (var p : moves(point))
+            costs[p.getX()][p.getY()] = Math.min(pointCost + 1, costs[p.getX()][p.getY()]);
+    }
+
     public Backtracking(GameData gameData) {
         this.gameData = gameData;
         cleanCosts();
@@ -1023,7 +1046,7 @@ class Backtracking {
      *     <li>start->chest without tortuga</li>
      * </ol>
      */
-    public Snapshot run() {
+    public void run() {
         var initialGameData = gameData.clone();
 
         var firstRun = wrappedRun(gameData.getJackSparrow(), gameData.getTortuga(), initialGameData);
@@ -1061,7 +1084,8 @@ class Backtracking {
                 .sorted(Comparator.comparingInt(p -> p.getSteps().size()))
                 .toList();
 
-        return !result.isEmpty() ? result.get(0) : null;
+        if (!result.isEmpty())
+            currentSnapshot = result.get(0);
     }
 
     /**
@@ -1072,6 +1096,10 @@ class Backtracking {
      */
     public void setGameData(GameData gameData) {
         this.gameData = gameData;
+    }
+
+    public Snapshot getCurrentSnapshot() {
+        return currentSnapshot;
     }
 }
 
@@ -1313,12 +1341,9 @@ class OutputHelper {
      * @param outputPath output file path.
      * @param snapshot   nullable snapshot.
      * @param millis     algorithm execution time in milliseconds.
-     * @throws IOException if given an output file which is not defined in this class, or default cases of IOException.
+     * @throws IOException default cases of IOException.
      */
     static void printResult(Path outputPath, Snapshot snapshot, long millis) throws IOException {
-        if (!outputPath.equals(BACKTRACKING_OUT) || !outputPath.equals(A_STAR_OUT))
-            throw new IOException("Invalid output file path!");
-
         if (snapshot == null) Files.writeString(outputPath, "Lose\n");
         else Files.writeString(outputPath, String.format("Win\n%s\n%d ms\n", snapshot, millis));
     }
@@ -1442,9 +1467,10 @@ class TestHelper {
      *
      * @param repeatNumber number of generated random tests.
      * @param algorithm algorithm option.
+     * @param scenario game scenario.
      * @return TestResult record.
      */
-    public static TestResult run(int repeatNumber, int algorithm) {
+    public static TestResult run(int repeatNumber, int algorithm, int scenario) {
         var results = new ArrayList<Long>(repeatNumber);
         long startMillis, endMillis;
 
