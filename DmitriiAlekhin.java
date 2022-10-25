@@ -40,13 +40,8 @@ public class DmitriiAlekhin {
                         System.currentTimeMillis() - startMillis
                 );
 
-            } else if (args[0].equals("-t") || args[0].equals("--test")) {
-
-                System.out.printf(
-                        "Backtracking test results:\n%s\n",
-                        TestHelper.run(1000, TestHelper.BACKTRACKING, 1)
-                );
-            }
+            } else if (args[0].equals("-t") || args[0].equals("--test"))
+                TestHelper.run(1000);
         } catch (Exception e) {
             System.out.println("Exception occurred!");
             e.printStackTrace();
@@ -942,17 +937,19 @@ abstract class SearchingAlgorithm {
                 var krakenStartData = finalKrakenRun.getGameData().clone();
                 krakenStartData.tryRemoveKraken();
 
-                var nearKraken = finalKrakenRun.getSteps().get(finalKrakenRun.getSteps().size() - 1);
-                var chestRun = partialRun(nearKraken, gameData.getChest(), krakenStartData);
+                if (!finalKrakenRun.getSteps().isEmpty()) {
+                    var nearKraken = finalKrakenRun.getSteps().get(finalKrakenRun.getSteps().size() - 1);
+                    var chestRun = partialRun(nearKraken, gameData.getChest(), krakenStartData);
 
-                if (chestRun != null) {
-                    var combinedList = new ArrayList<>(tortugaRun.getSteps());
-                    combinedList.addAll(finalKrakenRun.getSteps());
-                    combinedList.addAll(chestRun.getSteps());
-                    takeSnapshot(combinedList, chestRun.getGameData());
+                    if (chestRun != null) {
+                        var combinedList = new ArrayList<>(tortugaRun.getSteps());
+                        combinedList.addAll(finalKrakenRun.getSteps());
+                        combinedList.addAll(chestRun.getSteps());
+                        takeSnapshot(combinedList, chestRun.getGameData());
 
-                    combinedRun = currentSnapshot;
-                    currentSnapshot = null;
+                        combinedRun = currentSnapshot;
+                        currentSnapshot = null;
+                    }
                 }
             }
         }
@@ -965,16 +962,6 @@ abstract class SearchingAlgorithm {
                 .toList();
 
         return result.isEmpty() ? null : result.get(0);
-    }
-
-    /**
-     * Needed for the small optimization in the tests. Allows to replace the game data
-     * for each test avoiding extra creation of Backtracking objects.
-     *
-     * @param gameData custom game data.
-     */
-    public void setGameData(GameData gameData) {
-        this.gameData = gameData;
     }
 }
 
@@ -1377,7 +1364,7 @@ class AStar extends SearchingAlgorithm {
 
         // Fix for the blocked kraken cells: If we cannot connect our path with the start point => return null
         if (
-                gameData.getMatrix().firstScenario(start.getX(), start.getY())
+                steps.isEmpty() || gameData.getMatrix().firstScenario(start.getX(), start.getY())
                         .noneMatch(p -> p.equals(stepsList.get(0)))
         ) {
             currentSnapshot = null;
@@ -1552,33 +1539,6 @@ class OutputHelper {
 }
 
 /**
- * Test time result record.
- *
- * @param allTimeResults time results for all tests.
- * @param mean           average time result.
- * @param median         median time result.
- * @param mode           mode time result.
- * @param sDeviation     standard deviation.
- * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
- * @see TestHelper
- * @see Backtracking
- * @see AStar
- */
-record TestResult(
-        List<Long> allTimeResults,
-        double mean, double median, long mode,
-        double sDeviation
-) {
-    @Override
-    public String toString() {
-        return "mean = " + mean + "\n" +
-                "median = " + median + "\n" +
-                "mode = " + mode + "\n" +
-                "sDeviation = " + sDeviation;
-    }
-}
-
-/**
  * Tests helper utility class.
  *
  * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
@@ -1586,16 +1546,6 @@ record TestResult(
  * @see AStar
  */
 class TestHelper {
-
-    /**
-     * Backtracking option.
-     */
-    public static final int BACKTRACKING = 0;
-
-    /**
-     * AStar option.
-     */
-    public static final int A_STAR = 1;
 
     /**
      * Returns mean of tests results.
@@ -1628,7 +1578,7 @@ class TestHelper {
      * @return mode of tests results.
      */
     private static long mode(List<Long> results) {
-        var maxFrequency = 0;
+        var maxFrequency = -1;
         var mode = -1L;
 
         for (var r : results) {
@@ -1664,43 +1614,98 @@ class TestHelper {
     }
 
     /**
+     * Prints the descriptive statistics for the given list of execution times:
+     * <ol>
+     *     <li>Win rate</li>
+     *     <li>Lose rate</li>
+     *     <li>Mean of the execution times</li>
+     *     <li>Mode of the execution times</li>
+     *     <li>Median of the execution times</li>
+     *     <li>Standard deviation of the execution times</li>
+     * </ol>
+     *
+     * @param winRate win rate.
+     * @param loseRate lose rate.
+     * @param timeResults list of execution times.
+     */
+    private static void printStats(int winRate, int loseRate, List<Long> timeResults) {
+        System.out.printf(
+                "winRate: %d\nloseRate: %d\nmean: %f\nmode: %d\nmedian: %f\nsDeviation: %f\n\n",
+                winRate, loseRate,
+                mean(timeResults), mode(timeResults), median(timeResults),
+                sDeviation(timeResults)
+        );
+    }
+
+    /**
      * Generates and runs <code>repeatNumber</code> tests and returns the results
-     * as a TestResult record
+     * prints the statistical data of both Backtracking and A* algorithms:
+     * <ol>
+     *     <li>Win rate</li>
+     *     <li>Lose rate</li>
+     *     <li>Mean of the execution times</li>
+     *     <li>Mode of the execution times</li>
+     *     <li>Median of the execution times</li>
+     *     <li>Standard deviation of the execution times</li>
+     * </ol>
      *
      * @param repeatNumber number of generated random tests.
-     * @param algorithm    algorithm option.
-     * @param scenario     game scenario.
-     * @return TestResult record.
      */
-    public static TestResult run(int repeatNumber, int algorithm, int scenario) {
-        var results = new ArrayList<Long>(repeatNumber);
-        long startMillis, endMillis;
+    public static void run(int repeatNumber) throws IOException {
+        var backtrackingFirstTimes = new ArrayList<Long>(repeatNumber);
+        var backtrackingFirstWins = 0;
 
-        switch (algorithm) {
-            case BACKTRACKING -> {
-                var backtracking = new Backtracking(null, scenario);
-                for (int i = 0; i < repeatNumber; i++) {
-                    if (i % 100 == 0) System.out.printf("Running test No. %d\n", i);
+        var backtrackingSecondTimes = new ArrayList<Long>(repeatNumber);
+        var backtrackingSecondWins = 0;
 
-                    backtracking.setGameData(new GameData());
+        var aStarFirstTimes = new ArrayList<Long>(repeatNumber);
+        var aStarFirstWins = 0;
 
-                    startMillis = System.currentTimeMillis();
-                    backtracking.run();
-                    endMillis = System.currentTimeMillis();
+        var aStarSecondTimes = new ArrayList<Long>(repeatNumber);
+        var aStarSecondWins = 0;
 
-                    results.add(endMillis - startMillis);
-                }
+        for (int i = 0; i < repeatNumber; i++) {
+            if (i % 100 == 0)
+                System.out.printf("Running test N = %d\n", i);
+
+            var data1 = new GameData();
+            var data2 = data1.clone();
+            var data3 = data2.clone();
+            var data4 = data3.clone();
+
+            var startMillis = System.currentTimeMillis();
+            var result1 = new Backtracking(data1, 1).run();
+            backtrackingFirstTimes.add(System.currentTimeMillis() - startMillis);
+            if (result1 != null) ++backtrackingFirstWins;
+
+            startMillis = System.currentTimeMillis();
+            var result2 = new Backtracking(data2, 2).run();
+            backtrackingSecondTimes.add(System.currentTimeMillis() - startMillis);
+            if (result2 != null) ++backtrackingSecondWins;
+
+            startMillis = System.currentTimeMillis();
+            var result3 = new AStar(data3, 1).run();
+            aStarFirstTimes.add(System.currentTimeMillis() - startMillis);
+            if (result3 != null) ++aStarFirstWins;
+
+            startMillis = System.currentTimeMillis();
+            var result4 = new AStar(data4, 2).run();
+            aStarSecondTimes.add(System.currentTimeMillis() - startMillis);
+            if (result4 != null) ++aStarSecondWins;
+
+            if (backtrackingFirstWins != aStarFirstWins) {
+                System.out.println("FATAL!");
+
+                OutputHelper.printResult(OutputHelper.BACKTRACKING_OUT, result1, 0);
+                OutputHelper.printResult(OutputHelper.A_STAR_OUT, result3, 0);
+
+                break;
             }
-
-            case A_STAR -> throw new IllegalArgumentException("Not working :(");
-            default -> throw new IllegalArgumentException("Illegal algorithm ID");
         }
 
-        return new TestResult(
-                results,
-                mean(results), median(results),
-                mode(results),
-                sDeviation(results)
-        );
+        printStats(backtrackingFirstWins, repeatNumber - backtrackingFirstWins, backtrackingFirstTimes);
+        printStats(backtrackingSecondWins, repeatNumber - backtrackingSecondWins, backtrackingSecondTimes);
+        printStats(aStarFirstWins, repeatNumber - aStarFirstWins, aStarFirstTimes);
+        printStats(aStarSecondWins, repeatNumber - aStarSecondWins, aStarSecondTimes);
     }
 }
