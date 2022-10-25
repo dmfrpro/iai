@@ -859,6 +859,9 @@ class Backtracking {
      */
     private GameData gameData;
 
+    /**
+     * Game scenario
+     */
     private final int scenario;
 
     /**
