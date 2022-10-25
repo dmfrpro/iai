@@ -44,6 +44,8 @@ public class DmitriiAlekhin {
                 TestHelper.run(1000);
         } catch (Exception e) {
             System.out.println("Exception occurred!");
+            System.out.println("Message: " + e.getMessage());
+            System.out.println("Stacktrace: ");
             e.printStackTrace();
         }
     }
