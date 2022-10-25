@@ -13,7 +13,6 @@ import java.util.stream.Stream;
  * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
  */
 public class Solution {
-
     public static void main(String[] args) {
         try {
             if (args.length == 0) {
@@ -840,7 +839,50 @@ class Snapshot {
 }
 
 abstract class SearchingAlgorithm {
+    /**
+     * Current game data during the execution of a partial run from start to target.
+     */
+    protected GameData gameData;
 
+    /**
+     * Game scenario
+     */
+    protected final int scenario;
+
+    /**
+     * Stores the current snapshot during the execution of a partial run from start to target.
+     */
+    protected Snapshot currentSnapshot;
+
+    /**
+     * Stores the current path steps during the execution of a partial run from start to target.
+     */
+    protected final Stack<Point> steps = new Stack<>();
+
+    /**
+     * Target point (Tortuga + Kraken + Chest run or just Chest run)
+     */
+    protected Point target;
+
+    /**
+     * Stores the minimum steps count over a run from start to target.
+     */
+    protected int minStepsCount = Integer.MAX_VALUE;
+
+    public SearchingAlgorithm(int scenario, GameData gameData) {
+        this.scenario = scenario;
+        this.gameData = gameData;
+    }
+
+    /**
+     * Indicates if the point is dangerous.
+     *
+     * @param point current point.
+     * @return true if the point is dangerous, false otherwise.
+     */
+    protected boolean isLosing(Point point) {
+        return !point.getCell().isSafe();
+    }
 }
 
 /**
@@ -1240,11 +1282,11 @@ class AStar {
             for (var n : moves(current)) {
                 if (!open.contains(n)) {
 
-                    if (moves(n).contains(getNode(gameData.getKraken()))) {
-                        closed.add(n);
-                        n.parent = current;
-                        break; // We found Kraken!
-                    }
+//                    if (moves(n).contains(getNode(gameData.getKraken()))) {
+//                        closed.add(n);
+//                        n.parent = current;
+//                        break; // We found Kraken!
+//                    }
 
                     n.gCost = current.gCost + 1;
                     n.parent = current;
@@ -1443,8 +1485,8 @@ class InputHelper {
                     var split = x.replaceAll("[\\[\\]]+", "").split(",");
                     return MATRIX.getPoint(Integer.parseInt(split[0]), Integer.parseInt(split[1]));
                 })
-                .map(p -> p.orElse(null))
-                .filter(Objects::nonNull)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
                 .toList();
 
         if (points.size() != 6)
