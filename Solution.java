@@ -1075,6 +1075,7 @@ class Backtracking {
 
                         return middlePoint.isPresent() && middlePoint.get().getCell().isSafe();
                     })
+                    .filter(p -> p.getCell().isSafe())
                     .forEach(p -> costs[p.getX()][p.getY()] = Math.min(pointCost + 2, costs[p.getX()][p.getY()]));
     }
 
