@@ -24,7 +24,6 @@ public class Solution {
                 var backtracking = new Backtracking(game, scenario);
 
                 var startMillis = System.currentTimeMillis();
-//                backtracking.run();
 
                 OutputHelper.printResult(
                         OutputHelper.BACKTRACKING_OUT,
@@ -33,11 +32,10 @@ public class Solution {
                 );
 
                 var aStar = new AStar(new GameData(points), scenario);
-                aStar.run();
 
                 OutputHelper.printResult(
                         OutputHelper.A_STAR_OUT,
-                        aStar.getCurrentSnapshot(),
+                        aStar.run(),
                         System.currentTimeMillis() - startMillis
                 );
 
@@ -1034,38 +1032,21 @@ class Backtracking extends SearchingAlgorithm {
      *
      * @param point current point.
      */
-    private void doBacktracking(Point point) {
+    private void doRun(Point point) {
         if (isLosing(point)) return;
         if (steps.size() + 1 >= minStepsCount) return;
 
         steps.push(point);
-
         gameData.setPath(point.getX(), point.getY());
-
         var moves = moves(point);
-
-        if (target.getCell().isKraken()) {
-            if (moves.stream().anyMatch(p -> p.getCell().isKraken())) {
-                takeSnapshot();
-
-                minStepsCount = steps.size();
-
-                gameData.unsetPath(point.getX(), point.getY());
-                steps.pop();
-
-                return; // We found Kraken!
-            }
-        }
 
         if (point.equals(target)) {
             takeSnapshot();
-
             minStepsCount = steps.size();
-
         } else {
             updateNeighborCosts(point);
             for (var p : moves)
-                doBacktracking(p);
+                doRun(p);
         }
 
         gameData.unsetPath(point.getX(), point.getY());
@@ -1101,17 +1082,14 @@ class Backtracking extends SearchingAlgorithm {
         costs[start.getX()][start.getY()] = 0;
 
         var moves = moves(start);
-
         updateNeighborCosts(start);
-
         gameData.setPath(start.getX(), start.getY());
 
         for (var p : moves)
-            doBacktracking(p);
+            doRun(p);
 
         gameData.unsetPath(start.getX(), start.getY());
         costs[start.getX()][start.getY()] = Integer.MAX_VALUE;
-
         cleanCosts();
 
         // Force reset minStepsCount for other runs
@@ -1203,6 +1181,14 @@ class AStar extends SearchingAlgorithm {
         return nodes[point.getX()][point.getY()];
     }
 
+    private void cleanNodes() {
+        for (int y = 0; y < 9; y++)
+            for (int x = 0; x < 9; x++) {
+                nodes[x][y].parent = null;
+                nodes[x][y].gCost = 0;
+            }
+    }
+
     public AStar(GameData gameData, int scenario) {
         super(gameData, scenario);
 
@@ -1234,7 +1220,6 @@ class AStar extends SearchingAlgorithm {
 
             for (var n : moves(current)) {
                 if (!open.contains(n)) {
-
                     n.gCost = current.gCost + 1;
                     n.parent = current;
                     open.offer(n);
@@ -1245,7 +1230,7 @@ class AStar extends SearchingAlgorithm {
                     }
                 }
 
-                closed.add(n);
+                closed.add(n); // TODO
             }
 
             closed.add(current);
@@ -1264,35 +1249,35 @@ class AStar extends SearchingAlgorithm {
             return snapshotCopy;
         }
 
-        steps.clear();
-
         if (isLosing(start)) return null;
 
         var tmpGameData = gameData.clone();
         gameData = data;
 
+        steps.clear();
+        closed.clear();
+        cleanNodes();
+
         doRun(getNode(start));
 
         var current = getNode(target);
 
-//        if (target.getCell().isKraken()) {
-//            var probe = closed.stream()
-//                    .map(n -> n.point)
-//                    .anyMatch(
-//                            p -> gameData.getMatrix().corners(p.getX(), p.getY())
-//                                    .anyMatch(np -> np.getCell().isKraken())
-//                    );
-//
-//            if (!probe) return null;
-//        } else if (!closed.contains(getNode(target))) return null;
-
-        for (; !current.point.equals(getNode(start).point); current = current.parent)
+        for (; current != null && !current.point.equals(getNode(start).point); current = current.parent)
             steps.push(current.point);
 
         gameData.setPath(start.getX(), start.getY());
 
         var stepsList = new ArrayList<>(steps);
         Collections.reverse(stepsList);
+
+        // Fix for the blocked kraken cells: If we cannot connect our path with the start point => return null
+        if (
+                gameData.getMatrix().firstScenario(start.getX(), start.getY())
+                        .noneMatch(p -> p.equals(stepsList.get(0)))
+        ) {
+            currentSnapshot = null;
+            return null;
+        }
 
         while (!steps.isEmpty()) {
             var p = steps.pop();
@@ -1307,10 +1292,6 @@ class AStar extends SearchingAlgorithm {
 
         return snapshotCopy;
     }
-
-//    public void run() {
-//        currentSnapshot = wrappedRun(gameData.getJackSparrow(), gameData.getChest(), gameData);
-//    }
 }
 
 
