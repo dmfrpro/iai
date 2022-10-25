@@ -356,6 +356,7 @@ class Point implements Cloneable {
         try {
             var clone = (Point) super.clone();
             clone.cell = cell;
+            clone.path = path;
             return clone;
         } catch (CloneNotSupportedException e) {
             throw new AssertionError();
@@ -930,7 +931,7 @@ abstract class SearchingAlgorithm {
     public Snapshot run() {
         var initialGameData = gameData.clone();
 
-        var tortugaRun = partialRun(gameData.getJackSparrow(), gameData.getTortuga(), initialGameData);
+        var tortugaRun = partialRun(gameData.getJackSparrow(), gameData.getTortuga(), initialGameData.clone());
         Snapshot combinedRun = null;
 
         if (tortugaRun != null) {
