@@ -12,7 +12,7 @@ import java.util.stream.Stream;
  *
  * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
  */
-public class Solution {
+public class DmitriiAlekhin {
     public static void main(String[] args) {
         try {
             if (args.length == 0) {
@@ -810,6 +810,14 @@ class Snapshot {
     }
 }
 
+/**
+ * Common logic for searching algorithms with respect to game rules.
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ * @see Backtracking
+ * @see AStar
+ * @see TestHelper
+ */
 abstract class SearchingAlgorithm {
     /**
      * Current game data during the execution of a partial run from start to target.
@@ -840,6 +848,21 @@ abstract class SearchingAlgorithm {
      * Stores the minimum steps count over a run from start to target.
      */
     protected int minStepsCount = Integer.MAX_VALUE;
+
+    /**
+     * Performs runs from Tortuga to Kraken's weak points (corners).
+     * Returns a list of these runs sorted by path length.
+     *
+     * @param tortugaGameData game map with already executed run spawn->tortuga.
+     * @return list of runs tortuga->kraken_weak_point sorted by run's path in ascending order.
+     */
+    private List<Snapshot> krakenCornersRuns(GameData tortugaGameData) {
+        return gameData.getMatrix().corners(gameData.getKraken().getX(), gameData.getKraken().getY())
+                .map(p -> partialRun(gameData.getTortuga(), p, tortugaGameData.clone()))
+                .filter(Objects::nonNull)
+                .sorted(Comparator.comparingInt(s -> s.getSteps().size()))
+                .toList();
+    }
 
     /**
      * Indicates if the point is dangerous.
@@ -883,22 +906,24 @@ abstract class SearchingAlgorithm {
         this.scenario = scenario;
     }
 
+    /**
+     * Performs run from defined <code>start</code> and <code>target</code> points.
+     *
+     * @param start start point, not included to the path.
+     * @param target target point, included to the path.
+     * @param gameData game data.
+     * @return resulting snapshot of the run (nullable).
+     */
     public abstract Snapshot partialRun(Point start, Point target, GameData gameData);
-
-    private List<Snapshot> krakenCornersRuns(GameData tortugaGameData) {
-        return gameData.getMatrix().corners(gameData.getKraken().getX(), gameData.getKraken().getY())
-                .map(p -> partialRun(gameData.getTortuga(), p, tortugaGameData.clone()))
-                .filter(Objects::nonNull)
-                .sorted(Comparator.comparingInt(s -> s.getSteps().size()))
-                .toList();
-    }
 
     /**
      * Preforms 2 complete runs and chooses the best one.
      * <ol>
-     *     <li>start->tortuga + tortuga->kraken + kraken->chest</li>
+     *     <li>start->tortuga + tortuga->best_kraken + kraken->chest</li>
      *     <li>start->chest without tortuga</li>
      * </ol>
+     *
+     * Best_kraken run is the best run from Tortuga to the one of Kraken's corners.
      */
     public Snapshot run() {
         var initialGameData = gameData.clone();
@@ -1262,7 +1287,6 @@ class AStar extends SearchingAlgorithm {
         return snapshotCopy;
     }
 }
-
 
 /**
  * Input helper utility class.
