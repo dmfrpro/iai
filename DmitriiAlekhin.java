@@ -1064,13 +1064,9 @@ class Backtracking extends SearchingAlgorithm {
 
         this.target = target;
         costs[start.getX()][start.getY()] = 0;
-
-        var moves = moves(start);
-        updateNeighborCosts(start);
         gameData.setPath(start.getX(), start.getY());
 
-        for (var p : moves)
-            doRun(p);
+        doRun(start);
 
         gameData.unsetPath(start.getX(), start.getY());
         costs[start.getX()][start.getY()] = Integer.MAX_VALUE;
