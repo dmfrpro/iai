@@ -4,6 +4,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -67,7 +68,7 @@ interface Cell {
      * @param cls Cell enum
      * @return true if the class is identical to cls
      */
-    default boolean hasType(Class<?> cls) {
+    default boolean isTypeOf(Class<?> cls) {
         return this.getClass() == cls;
     }
 
@@ -95,7 +96,7 @@ interface Cell {
      * @return true if the cell is free to step on / spawn, false otherwise
      */
     default boolean isFree() {
-        return this.hasType(AirCell.class);
+        return this.isTypeOf(AirCell.class);
     }
 }
 
@@ -549,7 +550,7 @@ class GameData implements Cloneable {
                     ? KrakenEnemiesFamilyCell.KRAKEN_ROCK
                     : KrakenEnemiesFamilyCell.KRAKEN;
 
-            if (matrixCell.hasType(KrakenEnemiesFamilyCell.class) || matrixCell.isFree()) {
+            if (matrixCell.isTypeOf(KrakenEnemiesFamilyCell.class) || matrixCell.isFree()) {
                 point.setCell(newCell);
                 matrix.neighbors(x, y).forEach(c -> trySetAir(AirCell.PERCEPTION, c.getX(), c.getY()));
                 kraken = matrix.getPoint(x, y).get();
@@ -602,7 +603,7 @@ class GameData implements Cloneable {
                     ? KrakenEnemiesFamilyCell.KRAKEN_ROCK
                     : KrakenEnemiesFamilyCell.ROCK;
 
-            if (matrixCell.hasType(KrakenEnemiesFamilyCell.class) || matrixCell.isFree()) {
+            if (matrixCell.isTypeOf(KrakenEnemiesFamilyCell.class) || matrixCell.isFree()) {
                 point.setCell(newCell);
                 rock = point;
 
