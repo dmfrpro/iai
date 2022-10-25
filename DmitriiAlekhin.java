@@ -112,7 +112,7 @@ enum EnemyCell implements Cell {
 }
 
 /**
- * Kraken family cells. They are also considered as  removable enemy cells excluding Rock :).
+ * Kraken family cells. They are also considered as removable enemy cells excluding Rock :).
  *
  * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
  * @see Cell
@@ -986,6 +986,7 @@ abstract class SearchingAlgorithm {
  * @see GameData
  * @see Snapshot
  * @see Point
+ * @see SearchingAlgorithm
  */
 class Backtracking extends SearchingAlgorithm {
 
@@ -1135,10 +1136,39 @@ class Backtracking extends SearchingAlgorithm {
     }
 }
 
+/**
+ * A* algorithm over a sea map. Implementation is taken from the lecture 5
+ * as the optimizations.
+ *
+ * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+ * @author Innopolis University F22-Introduction-to-AI course instructors
+ * @see GameData
+ * @see Snapshot
+ * @see Point
+ * @see SearchingAlgorithm
+ */
 class AStar extends SearchingAlgorithm {
+    /**
+     * Node containing a point, a parent, and the cost (length of the path from <code>start</code> to
+     * this point).
+     *
+     * @author Dmitrii Alekhin (B21-03 d.alekhin@innopolis.university / @dmfrpro (Telegram))
+     */
     private class Node implements Comparable<Node> {
+
+        /**
+         * Parent node.
+         */
         Node parent;
+
+        /**
+         * Corresponding point.
+         */
         Point point;
+
+        /**
+         * G cost - length of the path from <code>start</code> to this point.
+         */
 
         int gCost = 0;
 
@@ -1146,6 +1176,19 @@ class AStar extends SearchingAlgorithm {
             this.point = point;
         }
 
+        /**
+         * Comparison by the formula <code>f = g + h</code>
+         *
+         * <ol>
+         *     <li><code>g</code> = g cost</li>
+         *     <li><code>h</code> - heuristic function result</li>
+         * </ol>
+         *
+         * In this case <code>h = max(abs(x - target.x), abs(y - target.y))</code>
+         *
+         * @param o the object to be compared.
+         * @return f - o.f.
+         */
         @Override
         public int compareTo(Node o) {
 
@@ -1166,16 +1209,34 @@ class AStar extends SearchingAlgorithm {
         }
     }
 
+    /**
+     * Nodes matrix.
+     */
     private final Node[][] nodes = new Node[9][9];
 
+    /**
+     * Queue for opened nodes.
+     */
     private final Queue<Node> open = new PriorityQueue<>();
 
+    /**
+     * Collection of closed (observed) points.
+     */
     private final Set<Node> closed = new HashSet<>();
 
+    /**
+     * Returns a node having the given point.
+     *
+     * @param point point.
+     * @return node having <code>point</code>.
+     */
     private Node getNode(Point point) {
         return nodes[point.getX()][point.getY()];
     }
 
+    /**
+     * Resets the data of the <code>nodes</code>.
+     */
     private void cleanNodes() {
         for (int y = 0; y < 9; y++)
             for (int x = 0; x < 9; x++) {
@@ -1184,6 +1245,12 @@ class AStar extends SearchingAlgorithm {
             }
     }
 
+    /**
+     * Returns available moves for the given <code>node</code>.
+     *
+     * @param node node for which the available moves will be returned.
+     * @return list of nodes - available moves for the given <code>node</code>.
+     */
     private List<Node> moves(Node node) {
         return Stream.concat(
                         gameData.getMatrix().neighbors(node.point.getX(), node.point.getY()),
@@ -1194,6 +1261,12 @@ class AStar extends SearchingAlgorithm {
                 .toList();
     }
 
+    /**
+     * Returns extra 4 second-order neighbors for the given <code>node</code>.
+     *
+     * @param node node for which the available moves will be returned.
+     * @return list of nodes - extra 4 second-order neighbors for the given <code>node</code>.
+     */
     private List<Node> secondScenarioMoves(Node node) {
         return gameData.getMatrix().secondNeighbors(node.point.getX(), node.point.getY())
                 .filter(p -> {
@@ -1208,6 +1281,11 @@ class AStar extends SearchingAlgorithm {
                 .toList();
     }
 
+    /**
+     * Core A* algorithm. Implementation is taken from the lecture notes.
+     *
+     * @param start start node.
+     */
     private void doRun(Node start) {
         open.offer(start);
 
@@ -1255,6 +1333,15 @@ class AStar extends SearchingAlgorithm {
                     nodes[x][y] = new Node(gameData.getMatrix().getPoint(x, y).get());
     }
 
+    /**
+     * Wraps A* run. Sets start and target, replaces game data,
+     * and then restores it after the run. Returns the best snapshot of this run.
+     *
+     * @param start  start point.
+     * @param target target point.
+     * @param data   game data for the run.
+     * @return best snapshot of this run.
+     */
     @Override
     public Snapshot partialRun(Point start, Point target, GameData data) {
         this.target = getNode(target).point;
