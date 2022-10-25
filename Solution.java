@@ -22,7 +22,7 @@ public class Solution {
                 var points = InputHelper.getPoints();
                 var scenario = InputHelper.getScenario();
                 var game = new GameData(points);
-                var backtracking = new Backtracking(game);
+                var backtracking = new Backtracking(game, scenario);
 
                 var startMillis = System.currentTimeMillis();
                 backtracking.run();
@@ -33,14 +33,14 @@ public class Solution {
                         System.currentTimeMillis() - startMillis
                 );
 
-                var aStar = new AStar(new GameData(points), scenario);
-                aStar.run();
-
-                OutputHelper.printResult(
-                        OutputHelper.A_STAR_OUT,
-                        aStar.getCurrentSnapshot(),
-                        System.currentTimeMillis() - startMillis
-                );
+//                var aStar = new AStar(new GameData(points), scenario);
+//                aStar.run();
+//
+//                OutputHelper.printResult(
+//                        OutputHelper.A_STAR_OUT,
+//                        aStar.getCurrentSnapshot(),
+//                        System.currentTimeMillis() - startMillis
+//                );
 
             } else if (args[0].equals("-t") || args[0].equals("--test")) {
 
@@ -199,7 +199,7 @@ class Matrix implements Cloneable {
                         getPoint(x + 1, y), getPoint(x - 1, y)
                 )
                 .filter(Optional::isPresent)
-                .map(p -> p.orElse(null));
+                .map(Optional::get);
     }
 
     /**
@@ -215,7 +215,7 @@ class Matrix implements Cloneable {
                         getPoint(x - 1, y + 1), getPoint(x - 1, y - 1)
                 )
                 .filter(Optional::isPresent)
-                .map(p -> p.orElse(null));
+                .map(Optional::get);
     }
 
     /**
@@ -232,7 +232,29 @@ class Matrix implements Cloneable {
                         getPoint(x + 2, y), getPoint(x - 2, y)
                 )
                 .filter(Optional::isPresent)
-                .map(p -> p.orElse(null));
+                .map(Optional::get);
+    }
+
+    /**
+     * First scenario moves.
+     *
+     * @param x x-coordinate.
+     * @param y y-coordinate.
+     * @return stream of neighbors + corners of the given point.
+     */
+    public Stream<Point> firstScenario(int x, int y) {
+        return Stream.concat(neighbors(x, y), corners(x, y));
+    }
+
+    /**
+     * Second scenario moves.
+     *
+     * @param x x-coordinate.
+     * @param y y-coordinate.
+     * @return stream of neighbors + corners + second neighbors of the given point.
+     */
+    public Stream<Point> secondScenario(int x, int y) {
+        return Stream.concat(firstScenario(x, y), secondNeighbors(x, y));
     }
 
     @Override
@@ -817,6 +839,10 @@ class Snapshot {
     }
 }
 
+abstract class SearchingAlgorithm {
+
+}
+
 /**
  * Backtracking algorithm over a sea map. Uses greedy point selection and basic heuristic
  * as the optimizations.
@@ -832,6 +858,8 @@ class Backtracking {
      * Current game data during the execution of a partial run from start to target.
      */
     private GameData gameData;
+
+    private final int scenario;
 
     /**
      * Heuristic storage. Heuristic is given as a <code>distanceSquared(target)</code>
@@ -868,10 +896,7 @@ class Backtracking {
      * @return available moves.
      */
     private List<Point> moves(Point point) {
-        return Stream.concat(
-                        gameData.getMatrix().corners(point.getX(), point.getY()),
-                        gameData.getMatrix().neighbors(point.getX(), point.getY())
-                )
+        return gameData.getMatrix().firstScenario(point.getX(), point.getY())
                 .filter(p -> p.getCell().isKraken() || p.getCell().isSafe())
                 .filter(p -> costs[p.getX()][p.getY()] >= steps.size())
                 .sorted((p1, p2) -> distanceSquared(p1) - distanceSquared(p2))
@@ -1039,12 +1064,23 @@ class Backtracking {
     private void updateNeighborCosts(Point point) {
         var pointCost = costs[point.getX()][point.getY()];
 
-        for (var p : moves(point))
-            costs[p.getX()][p.getY()] = Math.min(pointCost + 1, costs[p.getX()][p.getY()]);
+        moves(point).forEach(p -> costs[p.getX()][p.getY()] = Math.min(pointCost + 1, costs[p.getX()][p.getY()]));
+
+        if (scenario == 2)
+            gameData.getMatrix().secondNeighbors(point.getX(), point.getY())
+                    .filter(p -> {
+                        var middleX = Math.abs(point.getX() + p.getX()) / 2;
+                        var middleY = Math.abs(point.getY() + p.getY()) / 2;
+                        var middlePoint = gameData.getMatrix().getPoint(middleX, middleY);
+
+                        return middlePoint.isPresent() && middlePoint.get().getCell().isSafe();
+                    })
+                    .forEach(p -> costs[p.getX()][p.getY()] = Math.min(pointCost + 2, costs[p.getX()][p.getY()]));
     }
 
-    public Backtracking(GameData gameData) {
+    public Backtracking(GameData gameData, int scenario) {
         this.gameData = gameData;
+        this.scenario = scenario;
         cleanCosts();
     }
 
@@ -1182,10 +1218,10 @@ class AStar {
 
     private List<Node> moves(Node node) {
         return Stream.concat(
-                gameData.getMatrix().neighbors(node.point.getX(), node.point.getY()),
-                gameData.getMatrix().corners(node.point.getX(), node.point.getY())
-        )
-                .filter(p -> !closed.contains(getNode(p)) && p.getCell().isSafe())
+                        gameData.getMatrix().neighbors(node.point.getX(), node.point.getY()),
+                        gameData.getMatrix().corners(node.point.getX(), node.point.getY())
+                )
+                .filter(p -> !closed.contains(getNode(p)) && (p.getCell().isSafe() || p.getCell().isKraken()))
                 .map(this::getNode)
                 .toList();
     }
@@ -1199,6 +1235,13 @@ class AStar {
 
             for (var n : moves(current)) {
                 if (!open.contains(n)) {
+
+                    if (moves(n).contains(getNode(gameData.getKraken()))) {
+                        closed.add(n);
+                        n.parent = current;
+                        break; // We found Kraken!
+                    }
+
                     n.gCost = current.gCost + 1;
                     n.parent = current;
                     open.offer(n);
@@ -1210,8 +1253,6 @@ class AStar {
                 }
 
                 closed.add(n);
-
-//                break;
             }
 
             closed.add(current);
@@ -1271,7 +1312,16 @@ class AStar {
 
         var current = getNode(target);
 
-        if (!closed.contains(getNode(target))) return null;
+        if (target.getCell().isKraken()) {
+            var probe = closed.stream()
+                    .map(n -> n.point)
+                    .anyMatch(
+                            p -> gameData.getMatrix().corners(p.getX(), p.getY())
+                                    .anyMatch(np -> np.getCell().isKraken())
+                    );
+
+            if (!probe) return null;
+        } else if (!closed.contains(getNode(target))) return null;
 
         for (; !current.point.equals(getNode(start).point); current = current.parent) {
             steps.push(current.point);
@@ -1296,7 +1346,7 @@ class AStar {
     }
 
     public void run() {
-        currentSnapshot = wrappedRun(gameData.getJackSparrow(), gameData.getChest(), gameData);
+        currentSnapshot = wrappedRun(gameData.getJackSparrow(), gameData.getKraken(), gameData);
     }
 }
 
@@ -1580,7 +1630,7 @@ class TestHelper {
 
         switch (algorithm) {
             case BACKTRACKING -> {
-                var backtracking = new Backtracking(null);
+                var backtracking = new Backtracking(null, scenario);
                 for (int i = 0; i < repeatNumber; i++) {
                     if (i % 100 == 0) System.out.printf("Running test No. %d\n", i);
 
