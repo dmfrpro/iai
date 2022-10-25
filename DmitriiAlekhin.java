@@ -4,6 +4,7 @@ import java.io.InputStreamReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -909,8 +910,8 @@ abstract class SearchingAlgorithm {
     /**
      * Performs run from defined <code>start</code> and <code>target</code> points.
      *
-     * @param start start point, not included to the path.
-     * @param target target point, included to the path.
+     * @param start    start point, not included to the path.
+     * @param target   target point, included to the path.
      * @param gameData game data.
      * @return resulting snapshot of the run (nullable).
      */
@@ -922,7 +923,7 @@ abstract class SearchingAlgorithm {
      *     <li>start->tortuga + tortuga->best_kraken + kraken->chest</li>
      *     <li>start->chest without tortuga</li>
      * </ol>
-     *
+     * <p>
      * Best_kraken run is the best run from Tortuga to the one of Kraken's corners.
      */
     public Snapshot run() {
@@ -1183,24 +1184,26 @@ class AStar extends SearchingAlgorithm {
             }
     }
 
-    public AStar(GameData gameData, int scenario) {
-        super(gameData, scenario);
-
-        for (int i = 0; i < 9; i++)
-            nodes[i] = new Node[9];
-
-        for (int y = 0; y < 9; y++)
-            for (int x = 0; x < 9; x++)
-                if (gameData.getMatrix().getPoint(x, y).isPresent())
-                    nodes[x][y] = new Node(gameData.getMatrix().getPoint(x, y).get());
-    }
-
-    private List<Node> moves(Node node) { // TODO: add second scenario
+    private List<Node> moves(Node node) {
         return Stream.concat(
                         gameData.getMatrix().neighbors(node.point.getX(), node.point.getY()),
                         gameData.getMatrix().corners(node.point.getX(), node.point.getY())
                 )
                 .filter(p -> !closed.contains(getNode(p)) && (p.getCell().isSafe()))
+                .map(this::getNode)
+                .toList();
+    }
+
+    private List<Node> secondScenarioMoves(Node node) {
+        return gameData.getMatrix().secondNeighbors(node.point.getX(), node.point.getY())
+                .filter(p -> {
+                    var middleX = Math.abs(node.point.getX() + p.getX()) / 2;
+                    var middleY = Math.abs(node.point.getY() + p.getY()) / 2;
+                    var middlePoint = gameData.getMatrix().getPoint(middleX, middleY);
+
+                    return middlePoint.isPresent() && middlePoint.get().getCell().isSafe();
+                })
+                .filter(p -> p.getCell().isSafe())
                 .map(this::getNode)
                 .toList();
     }
@@ -1227,8 +1230,29 @@ class AStar extends SearchingAlgorithm {
                 closed.add(n);
             }
 
+            if (scenario == 2)
+                for (var n : secondScenarioMoves(current)) {
+                    if (!open.contains(n))
+                        n.gCost = current.gCost + 2;
+                    else if (current.gCost + 2 < n.gCost)
+                        n.gCost = current.gCost + 2;
+                }
+
             closed.add(current);
         }
+    }
+
+    public AStar(GameData gameData, int scenario) {
+        super(gameData, scenario);
+
+        for (int i = 0; i < 9; i++)
+            nodes[i] = new Node[9];
+
+        // Initialization of empty nodes matrix
+        for (int y = 0; y < 9; y++)
+            for (int x = 0; x < 9; x++)
+                if (gameData.getMatrix().getPoint(x, y).isPresent())
+                    nodes[x][y] = new Node(gameData.getMatrix().getPoint(x, y).get());
     }
 
     @Override
