@@ -80,15 +80,6 @@ interface Cell {
     }
 
     /**
-     * Determines if the cell has kraken / kraken on a rock.
-     *
-     * @return true if the cell has kraken / kraken on a rock, false otherwise
-     */
-    default boolean isKraken() {
-        return this == KrakenEnemiesFamilyCell.KRAKEN || this == KrakenEnemiesFamilyCell.KRAKEN_ROCK;
-    }
-
-    /**
      * Determines if the cell is free to step on / spawn.
      *
      * @return true if the cell is free to step on / spawn, false otherwise
@@ -242,17 +233,6 @@ class Matrix implements Cloneable {
      */
     public Stream<Point> firstScenario(int x, int y) {
         return Stream.concat(neighbors(x, y), corners(x, y));
-    }
-
-    /**
-     * Second scenario moves.
-     *
-     * @param x x-coordinate.
-     * @param y y-coordinate.
-     * @return stream of neighbors + corners + second neighbors of the given point.
-     */
-    public Stream<Point> secondScenario(int x, int y) {
-        return Stream.concat(firstScenario(x, y), secondNeighbors(x, y));
     }
 
     @Override
@@ -743,16 +723,8 @@ class GameData implements Cloneable {
         return jackSparrow;
     }
 
-    public Point getDavyJones() {
-        return davyJones;
-    }
-
     public Point getKraken() {
         return kraken;
-    }
-
-    public Point getRock() {
-        return rock;
     }
 
     public Point getChest() {
@@ -967,10 +939,6 @@ abstract class SearchingAlgorithm {
                 .toList();
 
         return result.isEmpty() ? null : result.get(0);
-    }
-
-    public Snapshot getCurrentSnapshot() {
-        return currentSnapshot;
     }
 
     /**
@@ -1202,7 +1170,7 @@ class AStar extends SearchingAlgorithm {
                     nodes[x][y] = new Node(gameData.getMatrix().getPoint(x, y).get());
     }
 
-    private List<Node> moves(Node node) {
+    private List<Node> moves(Node node) { // TODO: add second scenario
         return Stream.concat(
                         gameData.getMatrix().neighbors(node.point.getX(), node.point.getY()),
                         gameData.getMatrix().corners(node.point.getX(), node.point.getY())
@@ -1231,7 +1199,7 @@ class AStar extends SearchingAlgorithm {
                     }
                 }
 
-                closed.add(n); // TODO
+                closed.add(n);
             }
 
             closed.add(current);
