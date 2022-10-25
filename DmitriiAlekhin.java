@@ -25,7 +25,6 @@ public class DmitriiAlekhin {
                 var backtracking = new Backtracking(game, scenario);
 
                 var startMillis = System.currentTimeMillis();
-
                 OutputHelper.printResult(
                         OutputHelper.BACKTRACKING_OUT,
                         backtracking.run(),
@@ -34,6 +33,7 @@ public class DmitriiAlekhin {
 
                 var aStar = new AStar(new GameData(points), scenario);
 
+                startMillis = System.currentTimeMillis();
                 OutputHelper.printResult(
                         OutputHelper.A_STAR_OUT,
                         aStar.run(),
