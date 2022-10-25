@@ -33,14 +33,14 @@ public class Solution {
                         System.currentTimeMillis() - startMillis
                 );
 
-//                var aStar = new AStar(new GameData(points), scenario);
-//                aStar.run();
-//
-//                OutputHelper.printResult(
-//                        OutputHelper.A_STAR_OUT,
-//                        aStar.getCurrentSnapshot(),
-//                        System.currentTimeMillis() - startMillis
-//                );
+                var aStar = new AStar(new GameData(points), scenario);
+                aStar.run();
+
+                OutputHelper.printResult(
+                        OutputHelper.A_STAR_OUT,
+                        aStar.getCurrentSnapshot(),
+                        System.currentTimeMillis() - startMillis
+                );
 
             } else if (args[0].equals("-t") || args[0].equals("--test")) {
 
@@ -870,9 +870,9 @@ abstract class SearchingAlgorithm {
      */
     protected int minStepsCount = Integer.MAX_VALUE;
 
-    public SearchingAlgorithm(int scenario, GameData gameData) {
-        this.scenario = scenario;
+    public SearchingAlgorithm(GameData gameData, int scenario) {
         this.gameData = gameData;
+        this.scenario = scenario;
     }
 
     /**
@@ -883,6 +883,37 @@ abstract class SearchingAlgorithm {
      */
     protected boolean isLosing(Point point) {
         return !point.getCell().isSafe();
+    }
+
+    /**
+     * Takes the snapshot.
+     */
+    protected void takeSnapshot() {
+        if (currentSnapshot == null || currentSnapshot.getSteps().size() > steps.size())
+            currentSnapshot = new Snapshot(new ArrayList<>(steps), gameData.clone());
+        else {
+            currentSnapshot.setSteps(steps);
+            currentSnapshot.setGameData(gameData);
+        }
+    }
+
+    /**
+     * Takes the snapshot with the custom data.
+     *
+     * @param steps    custom steps.
+     * @param gameData custom game data.
+     */
+    protected void takeSnapshot(List<Point> steps, GameData gameData) {
+        if (currentSnapshot == null)
+            currentSnapshot = new Snapshot(steps, gameData);
+        else {
+            currentSnapshot.setSteps(steps);
+            currentSnapshot.setGameData(gameData);
+        }
+    }
+
+    public Snapshot getCurrentSnapshot() {
+        return currentSnapshot;
     }
 }
 
@@ -895,43 +926,13 @@ abstract class SearchingAlgorithm {
  * @see Snapshot
  * @see Point
  */
-class Backtracking {
-
-    /**
-     * Current game data during the execution of a partial run from start to target.
-     */
-    private GameData gameData;
-
-    /**
-     * Game scenario
-     */
-    private final int scenario;
+class Backtracking extends SearchingAlgorithm {
 
     /**
      * Heuristic storage. Heuristic is given as a <code>distanceSquared(target)</code>
      * for each point.
      */
     private final int[][] costs = new int[9][9];
-
-    /**
-     * Stores the current snapshot during the execution of a partial run from start to target.
-     */
-    private Snapshot currentSnapshot;
-
-    /**
-     * Stores the current path steps during the execution of a partial run from start to target.
-     */
-    private final Stack<Point> steps = new Stack<>();
-
-    /**
-     * Target point (Tortuga + Kraken + Chest run or just Chest run)
-     */
-    private Point target;
-
-    /**
-     * Stores the minimum steps count over a run from start to target.
-     */
-    private int minStepsCount = Integer.MAX_VALUE;
 
     /**
      * Returns available moves excluding dangerous (except for Kraken), previously observed ones,
@@ -957,43 +958,6 @@ class Backtracking {
      */
     private int distanceSquared(Point point) {
         return (int) (Math.pow(point.getX() - target.getX(), 2) + Math.pow(point.getY() - target.getY(), 2));
-    }
-
-    /**
-     * Indicates if the point is dangerous.
-     *
-     * @param point current point.
-     * @return true if the point is dangerous, false otherwise.
-     */
-    private boolean isLosing(Point point) {
-        return !point.getCell().isSafe();
-    }
-
-    /**
-     * Takes the snapshot.
-     */
-    private void takeSnapshot() {
-        if (currentSnapshot == null || currentSnapshot.getSteps().size() > steps.size())
-            currentSnapshot = new Snapshot(new ArrayList<>(steps), gameData.clone());
-        else {
-            currentSnapshot.setSteps(steps);
-            currentSnapshot.setGameData(gameData);
-        }
-    }
-
-    /**
-     * Takes the snapshot with the custom data.
-     *
-     * @param steps    custom steps.
-     * @param gameData custom game data.
-     */
-    private void takeSnapshot(List<Point> steps, GameData gameData) {
-        if (currentSnapshot == null)
-            currentSnapshot = new Snapshot(steps, gameData);
-        else {
-            currentSnapshot.setSteps(steps);
-            currentSnapshot.setGameData(gameData);
-        }
     }
 
     /**
@@ -1126,8 +1090,7 @@ class Backtracking {
     }
 
     public Backtracking(GameData gameData, int scenario) {
-        this.gameData = gameData;
-        this.scenario = scenario;
+        super(gameData, scenario);
         cleanCosts();
     }
 
@@ -1189,13 +1152,9 @@ class Backtracking {
     public void setGameData(GameData gameData) {
         this.gameData = gameData;
     }
-
-    public Snapshot getCurrentSnapshot() {
-        return currentSnapshot;
-    }
 }
 
-class AStar {
+class AStar extends SearchingAlgorithm {
     private class Node implements Comparable<Node> {
         Node parent;
         Point point;
@@ -1210,13 +1169,13 @@ class AStar {
         public int compareTo(Node o) {
 
             var h = Math.max(
-                    Math.abs(point.getX() - target.point.getX()),
-                    Math.abs(point.getY() - target.point.getY())
+                    Math.abs(point.getX() - target.getX()),
+                    Math.abs(point.getY() - target.getY())
             );
 
             var oh = Math.max(
-                    Math.abs(o.point.getX() - target.point.getX()),
-                    Math.abs(o.point.getY() - target.point.getY())
+                    Math.abs(o.point.getX() - target.getX()),
+                    Math.abs(o.point.getY() - target.getY())
             );
 
             var g = parent != null ? parent.gCost + 1 : 0;
@@ -1226,33 +1185,18 @@ class AStar {
         }
     }
 
-    private Node target;
-
-    private GameData gameData;
-
-    private final int scenario;
-
     private final Node[][] nodes = new Node[9][9];
 
     private final Queue<Node> open = new PriorityQueue<>();
 
     private final Set<Node> closed = new HashSet<>();
 
-    private final Stack<Point> steps = new Stack<>();
-
-    private Snapshot currentSnapshot;
-
-    public Snapshot getCurrentSnapshot() {
-        return currentSnapshot;
-    }
-
     private Node getNode(Point point) {
         return nodes[point.getX()][point.getY()];
     }
 
     public AStar(GameData gameData, int scenario) {
-        this.gameData = gameData;
-        this.scenario = scenario;
+        super(gameData, scenario);
 
         for (int i = 0; i < 9; i++)
             nodes[i] = new Node[9];
@@ -1268,7 +1212,7 @@ class AStar {
                         gameData.getMatrix().neighbors(node.point.getX(), node.point.getY()),
                         gameData.getMatrix().corners(node.point.getX(), node.point.getY())
                 )
-                .filter(p -> !closed.contains(getNode(p)) && (p.getCell().isSafe() || p.getCell().isKraken()))
+                .filter(p -> !closed.contains(getNode(p)) && (p.getCell().isSafe()))
                 .map(this::getNode)
                 .toList();
     }
@@ -1282,12 +1226,6 @@ class AStar {
 
             for (var n : moves(current)) {
                 if (!open.contains(n)) {
-
-//                    if (moves(n).contains(getNode(gameData.getKraken()))) {
-//                        closed.add(n);
-//                        n.parent = current;
-//                        break; // We found Kraken!
-//                    }
 
                     n.gCost = current.gCost + 1;
                     n.parent = current;
@@ -1306,39 +1244,8 @@ class AStar {
         }
     }
 
-    /**
-     * Takes the snapshot.
-     */
-    private void takeSnapshot() {
-        if (currentSnapshot == null || currentSnapshot.getSteps().size() > steps.size())
-            currentSnapshot = new Snapshot(new ArrayList<>(steps), gameData.clone());
-        else {
-            currentSnapshot.setSteps(steps);
-            currentSnapshot.setGameData(gameData);
-        }
-    }
-
-    /**
-     * Takes the snapshot with the custom data.
-     *
-     * @param steps    custom steps.
-     * @param gameData custom game data.
-     */
-    private void takeSnapshot(List<Point> steps, GameData gameData) {
-        if (currentSnapshot == null)
-            currentSnapshot = new Snapshot(steps, gameData);
-        else {
-            currentSnapshot.setSteps(steps);
-            currentSnapshot.setGameData(gameData);
-        }
-    }
-
-    private boolean isLosing(Point point) {
-        return gameData.getMatrix().getPoint(point.getX(), point.getY()).isEmpty() || !point.getCell().isSafe();
-    }
-
     private Snapshot wrappedRun(Point start, Point target, GameData data) {
-        this.target = getNode(target);
+        this.target = getNode(target).point;
 
         if (start == target) {
             takeSnapshot(new ArrayList<>(), gameData.clone());
@@ -1370,13 +1277,13 @@ class AStar {
             if (!probe) return null;
         } else if (!closed.contains(getNode(target))) return null;
 
-        for (; !current.point.equals(getNode(start).point); current = current.parent) {
+        for (; !current.point.equals(getNode(start).point); current = current.parent)
             steps.push(current.point);
-        }
 
         gameData.setPath(start.getX(), start.getY());
 
         var stepsList = new ArrayList<>(steps);
+        Collections.reverse(stepsList);
 
         while (!steps.isEmpty()) {
             var p = steps.pop();
@@ -1393,7 +1300,7 @@ class AStar {
     }
 
     public void run() {
-        currentSnapshot = wrappedRun(gameData.getJackSparrow(), gameData.getKraken(), gameData);
+        currentSnapshot = wrappedRun(gameData.getJackSparrow(), gameData.getChest(), gameData);
     }
 }
 
