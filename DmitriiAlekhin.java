@@ -1516,6 +1516,11 @@ class OutputHelper {
         if (snapshot == null) Files.writeString(outputPath, "Lose\n");
         else Files.writeString(outputPath, String.format("Win\n%s\n%d ms\n", snapshot, millis));
     }
+
+    static void printResult(Snapshot snapshot, long millis) {
+        if (snapshot == null) System.out.println("Lose");
+        else System.out.printf("Win\n%s\n%d ms\n", snapshot, millis);
+    }
 }
 
 /**
@@ -1673,11 +1678,17 @@ class TestHelper {
             aStarSecondTimes.add(System.currentTimeMillis() - startMillis);
             if (result4 != null) ++aStarSecondWins;
 
-            if (backtrackingFirstWins != aStarFirstWins) {
+            if (
+                    backtrackingFirstWins != aStarFirstWins || backtrackingSecondWins != aStarSecondWins ||
+                            backtrackingFirstWins != aStarSecondWins
+            ) {
                 System.out.println("FATAL!");
 
                 OutputHelper.printResult(OutputHelper.BACKTRACKING_OUT, result1, 0);
+                OutputHelper.printResult(result2, 0);
+
                 OutputHelper.printResult(OutputHelper.A_STAR_OUT, result3, 0);
+                OutputHelper.printResult(result4, 0);
 
                 break;
             }
