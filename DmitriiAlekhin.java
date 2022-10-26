@@ -714,8 +714,16 @@ class GameData implements Cloneable {
         return jackSparrow;
     }
 
+    public Point getDavyJones() {
+        return davyJones;
+    }
+
     public Point getKraken() {
         return kraken;
+    }
+
+    public Point getRock() {
+        return rock;
     }
 
     public Point getChest() {
@@ -1520,14 +1528,20 @@ class OutputHelper {
     /**
      * Writes the given nullable snapshot (null = lose) to the console.
      *
-     * @param snapshot   nullable snapshot.
-     * @param millis     algorithm execution time in milliseconds.
+     * @param snapshot nullable snapshot.
+     * @param millis   algorithm execution time in milliseconds.
      */
     public static void printResult(Snapshot snapshot, double millis) {
         if (snapshot == null) System.out.println("Lose");
         else System.out.printf("Win\n%s\n%.2f ms\n", snapshot, millis / 100);
     }
 
+    /**
+     * Rounds execution time in nanos. To print it, use time / 100 and format as %.2f.
+     *
+     * @param startNanos start time in nanoseconds.
+     * @return result / 10e4.
+     */
     public static long rounded(long startNanos) {
         return (long) ((System.nanoTime() - startNanos) / 10e4);
     }
@@ -1645,6 +1659,7 @@ class TestHelper {
      * </ol>
      *
      * @param repeatNumber number of generated random tests.
+     * @throws RuntimeException is test results for any of the iteration are not equal.
      */
     public static void run(int repeatNumber) throws IOException {
         var backtrackingFirstTimes = new ArrayList<Long>(repeatNumber);
@@ -1692,6 +1707,18 @@ class TestHelper {
                     backtrackingFirstWins != aStarFirstWins || backtrackingSecondWins != aStarSecondWins ||
                             backtrackingFirstWins != aStarSecondWins
             ) {
+
+                System.out.println("Map coordinates:");
+                System.out.printf("Jack Sparrow: %s\n", data1.getJackSparrow());
+                System.out.printf("Davy Jones: %s\n", data1.getDavyJones());
+                System.out.printf("Kraken: %s\n", data1.getKraken());
+                System.out.printf("Rock: %s\n", data1.getRock());
+                System.out.printf("Chest: %s\n", data1.getChest());
+                System.out.printf("Tortuga: %s\n\n", data1.getTortuga());
+
+                System.out.println("Backtracking First scenario and A* First scenario dumped into the files");
+                System.out.println("Backtracking Second scenario and A* Second scenario dumped into the console");
+
                 OutputHelper.printResult(OutputHelper.BACKTRACKING_OUT, result1, backtrackingFirstTimes.get(i));
                 OutputHelper.printResult(result2, backtrackingSecondTimes.get(i));
 
@@ -1702,9 +1729,16 @@ class TestHelper {
             }
         }
 
+        System.out.println("\n Backtracking First scenario stats:");
         printStats(backtrackingFirstWins, repeatNumber - backtrackingFirstWins, backtrackingFirstTimes);
+
+        System.out.println("Backtracking Second scenario stats:");
         printStats(backtrackingSecondWins, repeatNumber - backtrackingSecondWins, backtrackingSecondTimes);
+
+        System.out.println("A* First scenario stats:");
         printStats(aStarFirstWins, repeatNumber - aStarFirstWins, aStarFirstTimes);
+
+        System.out.println("A* Second scenario stats:");
         printStats(aStarSecondWins, repeatNumber - aStarSecondWins, aStarSecondTimes);
     }
 }
