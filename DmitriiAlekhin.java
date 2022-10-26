@@ -23,24 +23,24 @@ public class DmitriiAlekhin {
                 var game = new GameData(points);
                 var backtracking = new Backtracking(game, scenario);
 
-                var startMillis = System.currentTimeMillis();
+                var startNanos = System.nanoTime();
                 OutputHelper.printResult(
                         OutputHelper.BACKTRACKING_OUT,
                         backtracking.run(),
-                        System.currentTimeMillis() - startMillis
+                        OutputHelper.rounded(startNanos)
                 );
 
                 var aStar = new AStar(new GameData(points), scenario);
 
-                startMillis = System.currentTimeMillis();
+                startNanos = System.nanoTime();
                 OutputHelper.printResult(
                         OutputHelper.A_STAR_OUT,
                         aStar.run(),
-                        System.currentTimeMillis() - startMillis
+                        OutputHelper.rounded(startNanos)
                 );
 
             } else if (args[0].equals("-t") || args[0].equals("--test"))
-                TestHelper.run(1000);
+                TestHelper.run(Integer.parseInt(args[1]));
         } catch (Exception e) {
             System.out.println("Exception occurred!");
             System.out.println("Message: " + e.getMessage());
@@ -1512,14 +1512,24 @@ class OutputHelper {
      * @param millis     algorithm execution time in milliseconds.
      * @throws IOException default cases of IOException.
      */
-    static void printResult(Path outputPath, Snapshot snapshot, long millis) throws IOException {
+    public static void printResult(Path outputPath, Snapshot snapshot, double millis) throws IOException {
         if (snapshot == null) Files.writeString(outputPath, "Lose\n");
-        else Files.writeString(outputPath, String.format("Win\n%s\n%d ms\n", snapshot, millis));
+        else Files.writeString(outputPath, String.format("Win\n%s\n%.2f ms\n", snapshot, millis / 100));
     }
 
-    static void printResult(Snapshot snapshot, long millis) {
+    /**
+     * Writes the given nullable snapshot (null = lose) to the console.
+     *
+     * @param snapshot   nullable snapshot.
+     * @param millis     algorithm execution time in milliseconds.
+     */
+    public static void printResult(Snapshot snapshot, double millis) {
         if (snapshot == null) System.out.println("Lose");
-        else System.out.printf("Win\n%s\n%d ms\n", snapshot, millis);
+        else System.out.printf("Win\n%s\n%.2f ms\n", snapshot, millis / 100);
+    }
+
+    public static long rounded(long startNanos) {
+        return (long) ((System.nanoTime() - startNanos) / 10e4);
     }
 }
 
@@ -1562,9 +1572,9 @@ class TestHelper {
      * @param results list of tests results.
      * @return mode of tests results.
      */
-    private static long mode(List<Long> results) {
+    private static double mode(List<Long> results) {
         var maxFrequency = -1;
-        var mode = -1L;
+        var mode = -1D;
 
         for (var r : results) {
             var frequency = Collections.frequency(results, r);
@@ -1615,7 +1625,7 @@ class TestHelper {
      */
     private static void printStats(int winRate, int loseRate, List<Long> timeResults) {
         System.out.printf(
-                "winRate: %d\nloseRate: %d\nmean: %f\nmode: %d\nmedian: %f\nsDeviation: %f\n\n",
+                "winRate: %d\nloseRate: %d\nmean: %.2f\nmode: %.2f\nmedian: %.2f\nsDeviation: %.2f\n\n",
                 winRate, loseRate,
                 mean(timeResults), mode(timeResults), median(timeResults),
                 sDeviation(timeResults)
@@ -1658,39 +1668,37 @@ class TestHelper {
             var data3 = data2.clone();
             var data4 = data3.clone();
 
-            var startMillis = System.currentTimeMillis();
+            var startNanos = System.nanoTime();
             var result1 = new Backtracking(data1, 1).run();
-            backtrackingFirstTimes.add(System.currentTimeMillis() - startMillis);
+            backtrackingFirstTimes.add(OutputHelper.rounded(startNanos));
             if (result1 != null) ++backtrackingFirstWins;
 
-            startMillis = System.currentTimeMillis();
+            startNanos = System.nanoTime();
             var result2 = new Backtracking(data2, 2).run();
-            backtrackingSecondTimes.add(System.currentTimeMillis() - startMillis);
+            backtrackingSecondTimes.add(OutputHelper.rounded(startNanos));
             if (result2 != null) ++backtrackingSecondWins;
 
-            startMillis = System.currentTimeMillis();
+            startNanos = System.nanoTime();
             var result3 = new AStar(data3, 1).run();
-            aStarFirstTimes.add(System.currentTimeMillis() - startMillis);
+            aStarFirstTimes.add(OutputHelper.rounded(startNanos));
             if (result3 != null) ++aStarFirstWins;
 
-            startMillis = System.currentTimeMillis();
+            startNanos = System.nanoTime();
             var result4 = new AStar(data4, 2).run();
-            aStarSecondTimes.add(System.currentTimeMillis() - startMillis);
+            aStarSecondTimes.add(OutputHelper.rounded(startNanos));
             if (result4 != null) ++aStarSecondWins;
 
             if (
                     backtrackingFirstWins != aStarFirstWins || backtrackingSecondWins != aStarSecondWins ||
                             backtrackingFirstWins != aStarSecondWins
             ) {
-                System.out.println("FATAL!");
+                OutputHelper.printResult(OutputHelper.BACKTRACKING_OUT, result1, backtrackingFirstTimes.get(i));
+                OutputHelper.printResult(result2, backtrackingSecondTimes.get(i));
 
-                OutputHelper.printResult(OutputHelper.BACKTRACKING_OUT, result1, 0);
-                OutputHelper.printResult(result2, 0);
+                OutputHelper.printResult(OutputHelper.A_STAR_OUT, result3, aStarFirstTimes.get(i));
+                OutputHelper.printResult(result4, aStarSecondTimes.get(i));
 
-                OutputHelper.printResult(OutputHelper.A_STAR_OUT, result3, 0);
-                OutputHelper.printResult(result4, 0);
-
-                break;
+                throw new RuntimeException("Test results are not equal!");
             }
         }
 
