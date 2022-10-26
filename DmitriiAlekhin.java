@@ -85,6 +85,11 @@ interface Cell {
         return this.isTypeOf(AirCell.class);
     }
 
+    /**
+     * Determines if the cell is Kraken or Kraken on a rock.
+     *
+     * @return true if the cell is Kraken or Kraken on a rock, false otherwise
+     */
     default boolean isKraken() {
         return this == KrakenEnemiesFamilyCell.KRAKEN_ROCK || this == KrakenEnemiesFamilyCell.KRAKEN;
     }
@@ -1168,7 +1173,6 @@ class AStar extends SearchingAlgorithm {
         /**
          * G cost - length of the path from <code>start</code> to this point.
          */
-
         int gCost = 0;
 
         public Node(Point point) {
@@ -1346,7 +1350,6 @@ class AStar extends SearchingAlgorithm {
      */
     @Override
     protected void partialRun() {
-
         steps.clear();
         closed.clear();
         cleanNodes();
@@ -1729,7 +1732,7 @@ class TestHelper {
             }
         }
 
-        System.out.println("\n Backtracking First scenario stats:");
+        System.out.println("\nBacktracking First scenario stats:");
         printStats(backtrackingFirstWins, repeatNumber - backtrackingFirstWins, backtrackingFirstTimes);
 
         System.out.println("Backtracking Second scenario stats:");
