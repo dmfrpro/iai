@@ -526,7 +526,8 @@ class GameData implements Cloneable {
             var point = matrix.getPoint(x, y).get();
             var matrixCell = point.getCell();
 
-            var newCell = matrixCell == KrakenEnemiesFamilyCell.ROCK
+            var newCell = matrixCell == KrakenEnemiesFamilyCell.ROCK ||
+                    matrixCell == KrakenEnemiesFamilyCell.KRAKEN_ROCK
                     ? KrakenEnemiesFamilyCell.KRAKEN_ROCK
                     : KrakenEnemiesFamilyCell.KRAKEN;
 
@@ -641,17 +642,6 @@ class GameData implements Cloneable {
      */
     public void setPath(int x, int y) {
         matrix.getPoint(x, y).ifPresent(p -> p.setPath(true));
-    }
-
-    /**
-     * Tries to mark the point as "NOT included to the path" by the given coordinates.
-     * Ignores unsuccessful tries
-     *
-     * @param x x-coordinate.
-     * @param y y-coordinate.
-     */
-    public void unsetPath(int x, int y) {
-        matrix.getPoint(x, y).ifPresent(p -> p.setPath(false));
     }
 
     /**
@@ -776,13 +766,22 @@ class Snapshot {
     private List<Point> steps;
 
     /**
+     * Start point. Included in the matrix rendering, but not in the steps.
+     */
+    private Point start;
+
+    /**
      * GameData copy.
      */
     private final GameData gameData;
 
-    public Snapshot(List<Point> steps, GameData gameData) {
+    public Snapshot(List<Point> steps, GameData gameData, Point start) {
         this.steps = steps;
         this.gameData = gameData;
+        this.start = start;
+
+        // Force remove start point from the steps
+        steps.remove(start);
     }
 
     public List<Point> getSteps() {
@@ -791,6 +790,12 @@ class Snapshot {
 
     public void setSteps(List<Point> steps) {
         this.steps = steps;
+        this.steps.remove(start);
+    }
+
+    public void setStart(Point start) {
+        this.start = start;
+        steps.remove(this.start);
     }
 
     @Override
@@ -798,6 +803,9 @@ class Snapshot {
         var shortestPathString = steps.stream()
                 .map(Point::toString)
                 .collect(Collectors.joining(" "));
+
+        // Include start to the matrix rendering, but not in steps.
+        gameData.setPath(start.getX(), start.getY());
 
         steps.forEach(s -> gameData.setPath(s.getX(), s.getY()));
         return String.format("%d\n%s\n%s", steps.size(), shortestPathString, gameData.getMatrix());
@@ -834,7 +842,12 @@ abstract class SearchingAlgorithm {
     protected final Stack<Point> steps = new Stack<>();
 
     /**
-     * Target point (Tortuga + Kraken + Chest run or just Chest run)
+     * Start point (Either Jack Sparrow - immediate run, of Tortuga - Tortuga + Chest run).
+     */
+    protected Point start;
+
+    /**
+     * Target point (Tortuga + Chest run or just Chest run)
      */
     protected Point target;
 
@@ -848,19 +861,41 @@ abstract class SearchingAlgorithm {
      */
     protected boolean visitedTortuga = false;
 
+    private Snapshot exchangeSnapshot() {
+        var snapshotCopy = currentSnapshot;
+        currentSnapshot = null;
+        return snapshotCopy;
+    }
+
     /**
-     * Performs runs from Tortuga to Kraken's weak points (corners).
-     * Returns a list of these runs sorted by path length.
+     * Wraps partial runs with checking for initial conditions checking.
+     * Also wraps substitutions of <code>start</code> and <code>target</code>
+     * argument points.
      *
-     * @param tortugaGameData game map with already executed run spawn->tortuga.
-     * @return list of runs tortuga->kraken_weak_point sorted by run's path in ascending order.
+     * @param start  start point.
+     * @param target target point.
+     * @return resulting nullable snapshot.
      */
-    private List<Snapshot> krakenCornersRuns(GameData tortugaGameData) {
-        return gameData.getMatrix().corners(gameData.getKraken().getX(), gameData.getKraken().getY())
-                .map(p -> partialRun(gameData.getTortuga(), p))
-                .filter(Objects::nonNull)
-                .sorted(Comparator.comparingInt(s -> s.getSteps().size()))
-                .toList();
+    private Snapshot wrappedRun(Point start, Point target) {
+        if (start == target) {
+            takeSnapshot(new ArrayList<>(), start);
+            return exchangeSnapshot();
+        }
+
+        if (isLosing(start)) return exchangeSnapshot();
+
+        var startCopy = this.start;
+        var targetCopy = this.target;
+
+        this.start = start;
+        this.target = target;
+
+        partialRun();
+
+        this.start = startCopy;
+        this.target = targetCopy;
+
+        return exchangeSnapshot();
     }
 
     /**
@@ -878,7 +913,7 @@ abstract class SearchingAlgorithm {
      */
     protected void takeSnapshot() {
         if (currentSnapshot == null || currentSnapshot.getSteps().size() > steps.size())
-            currentSnapshot = new Snapshot(new ArrayList<>(steps), gameData);
+            currentSnapshot = new Snapshot(new ArrayList<>(steps), gameData, start);
         else
             currentSnapshot.setSteps(new ArrayList<>(steps));
     }
@@ -886,29 +921,31 @@ abstract class SearchingAlgorithm {
     /**
      * Takes the snapshot with the custom data.
      *
-     * @param steps    custom steps.
+     * @param steps custom steps.
      */
-    protected void takeSnapshot(List<Point> steps) {
-        if (currentSnapshot == null)
-            currentSnapshot = new Snapshot(steps, gameData);
-        else {
+    protected void takeSnapshot(List<Point> steps, Point start) {
+        if (currentSnapshot == null) {
+            currentSnapshot = new Snapshot(steps, gameData, start);
+        } else {
             currentSnapshot.setSteps(steps);
+            currentSnapshot.setStart(start);
+            currentSnapshot.getSteps().remove(start); // Force remove start point from the steps
         }
     }
 
     public SearchingAlgorithm(GameData gameData, int scenario) {
         this.gameData = gameData;
         this.scenario = scenario;
+
+        // Default values
+        start = gameData.getJackSparrow();
+        target = gameData.getChest();
     }
 
     /**
-     * Performs run from defined <code>start</code> and <code>target</code> points.
-     *
-     * @param start    start point, not included to the path.
-     * @param target   target point, included to the path.
-     * @return resulting snapshot of the run (nullable).
+     * Performs run from <code>start</code> and <code>target</code> points.
      */
-    public abstract Snapshot partialRun(Point start, Point target);
+    protected abstract void partialRun();
 
     /**
      * Preforms 2 complete runs and chooses the best one.
@@ -921,27 +958,24 @@ abstract class SearchingAlgorithm {
      */
     public Snapshot run() {
 
-        var tortugaRun = partialRun(gameData.getJackSparrow(), gameData.getTortuga());
+        var tortugaRun = wrappedRun(gameData.getJackSparrow(), gameData.getTortuga());
         visitedTortuga = true;
 
         Snapshot combinedRun = null;
-
         if (tortugaRun != null) {
-
-            var chestRun = partialRun(gameData.getTortuga(), gameData.getChest());
+            var chestRun = wrappedRun(gameData.getTortuga(), gameData.getChest());
 
             if (chestRun != null) {
                 var combinedList = new ArrayList<>(tortugaRun.getSteps());
                 combinedList.addAll(chestRun.getSteps());
-                takeSnapshot(combinedList);
+                takeSnapshot(combinedList, start);
 
-                combinedRun = currentSnapshot;
-                currentSnapshot = null;
+                combinedRun = exchangeSnapshot();
             }
         }
 
         visitedTortuga = false;
-        var immediateRun = partialRun(gameData.getJackSparrow(), gameData.getChest());
+        var immediateRun = wrappedRun(gameData.getJackSparrow(), gameData.getChest());
 
         var result = Stream.of(combinedRun, immediateRun)
                 .filter(Objects::nonNull)
@@ -980,12 +1014,15 @@ class Backtracking extends SearchingAlgorithm {
      */
     private List<Point> moves(Point point) {
         return gameData.getMatrix().firstScenario(point.getX(), point.getY())
-                .filter(p -> p.getCell().isSafe() || p.getCell().isKraken())
+                .filter(p -> p.getCell().isSafe())
                 .filter(p -> costs[p.getX()][p.getY()] >= steps.size())
                 .sorted((p1, p2) -> distanceSquared(p1) - distanceSquared(p2))
                 .toList();
     }
 
+    /**
+     * Point from which Kraken has been killed.
+     */
     private Point krakenKilledPoint = null;
 
     /**
@@ -1008,70 +1045,48 @@ class Backtracking extends SearchingAlgorithm {
         if (steps.size() + 1 >= minStepsCount) return;
 
         steps.push(point);
-        var moves = moves(point);
 
-        if (visitedTortuga && point.getCell().isKraken()) {
+        if (
+                visitedTortuga && gameData.getMatrix().firstScenario(point.getX(), point.getY())
+                        .anyMatch(p -> p.getCell().isKraken())
+        ) {
             gameData.tryRemoveKraken();
             krakenKilledPoint = point;
         }
 
-        if (!isLosing(point)) {
-            if (point.equals(target)) {
-                takeSnapshot();
-                minStepsCount = steps.size();
-            } else {
-                updateNeighborCosts(point);
-                for (var p : moves) doRun(p);
-            }
+        var moves = moves(point);
 
-            if (point.equals(krakenKilledPoint))
-                gameData.trySetKraken(gameData.getKraken().getX(), gameData.getKraken().getY());
+        if (point.equals(target)) {
+            takeSnapshot();
+            minStepsCount = steps.size();
+        } else {
+            updateNeighborCosts(point);
+            for (var p : moves) doRun(p);
         }
+
+        if (point.equals(krakenKilledPoint))
+            gameData.trySetKraken(gameData.getKraken().getX(), gameData.getKraken().getY());
 
         steps.pop();
     }
 
     /**
-     * Wraps backtracking run. Sets start and target, replaces game data,
-     * and then restores it after the run. Returns the best snapshot of this run.
-     *
-     * @param start  start point.
-     * @param target target point.
-     * @return best snapshot of this run.
+     * Performs a backtracking search run from start to target.
      */
     @Override
-    public Snapshot partialRun(Point start, Point target) {
-        if (start == target) {
-            takeSnapshot(new ArrayList<>());
-            var snapshotCopy = currentSnapshot;
-            currentSnapshot = null;
-
-            return snapshotCopy;
-        }
-
+    protected void partialRun() {
         cleanCosts();
 
-        if (isLosing(start)) return null;
-
-        this.target = target;
         costs[start.getX()][start.getY()] = 0;
-        gameData.setPath(start.getX(), start.getY());
 
         updateNeighborCosts(start);
-        for (var p : moves(start))
-            doRun(p);
+        doRun(start);
 
-        gameData.unsetPath(start.getX(), start.getY());
         costs[start.getX()][start.getY()] = Integer.MAX_VALUE;
         cleanCosts();
 
         // Force reset minStepsCount for other runs
         minStepsCount = Integer.MAX_VALUE;
-
-        var snapshotCopy = currentSnapshot;
-        currentSnapshot = null;
-
-        return snapshotCopy;
     }
 
     /**
@@ -1159,7 +1174,7 @@ class AStar extends SearchingAlgorithm {
          *     <li><code>g</code> = g cost</li>
          *     <li><code>h</code> - heuristic function result</li>
          * </ol>
-         *
+         * <p>
          * In this case <code>h = max(abs(x - target.x), abs(y - target.y))</code>
          *
          * @param o the object to be compared.
@@ -1193,7 +1208,7 @@ class AStar extends SearchingAlgorithm {
     /**
      * Queue for opened nodes.
      */
-    private final Queue<Node> open = new PriorityQueue<>();
+    private final Queue<Node> opened = new PriorityQueue<>();
 
     /**
      * Collection of closed (observed) points.
@@ -1228,11 +1243,13 @@ class AStar extends SearchingAlgorithm {
      * @return list of nodes - available moves for the given <code>node</code>.
      */
     private List<Node> moves(Node node) {
-        return Stream.concat(
-                        gameData.getMatrix().neighbors(node.point.getX(), node.point.getY()),
-                        gameData.getMatrix().corners(node.point.getX(), node.point.getY())
-                )
-                .filter(p -> !closed.contains(getNode(p)) && (p.getCell().isSafe()))
+        return gameData.getMatrix().firstScenario(node.point.getX(), node.point.getY())
+                .filter(p -> {
+                    var b1 = !closed.contains(getNode(p));
+                    var b2 = p.getCell().isSafe();
+
+                    return b1 && b2;
+                })
                 .map(this::getNode)
                 .toList();
     }
@@ -1258,22 +1275,27 @@ class AStar extends SearchingAlgorithm {
     }
 
     /**
-     * Core A* algorithm. Implementation is taken from the lecture notes.
+     * Core A* algorithm. Common implementation is taken from the lecture notes.
      *
      * @param start start node.
      */
     private void doRun(Node start) {
-        open.offer(start);
+        opened.offer(start);
 
-        while (!open.isEmpty()) {
+        while (!opened.isEmpty()) {
 
-            var current = open.poll();
+            var current = opened.poll();
+
+            if (visitedTortuga && gameData.getMatrix().firstScenario(current.point.getX(), current.point.getY())
+                    .anyMatch(p -> p.getCell().isKraken()))
+                gameData.tryRemoveKraken();
 
             for (var n : moves(current)) {
-                if (!open.contains(n)) {
+
+                if (!opened.contains(n)) {
                     n.gCost = current.gCost + 1;
                     n.parent = current;
-                    open.offer(n);
+                    opened.offer(n);
                 } else {
                     if (current.gCost + 1 < n.gCost) {
                         n.gCost = current.gCost + 1;
@@ -1286,7 +1308,7 @@ class AStar extends SearchingAlgorithm {
 
             if (scenario == 2)
                 for (var n : secondScenarioMoves(current)) {
-                    if (!open.contains(n))
+                    if (!opened.contains(n))
                         n.gCost = current.gCost + 2;
                     else if (current.gCost + 2 < n.gCost)
                         n.gCost = current.gCost + 2;
@@ -1294,6 +1316,8 @@ class AStar extends SearchingAlgorithm {
 
             closed.add(current);
         }
+
+        gameData.trySetKraken(gameData.getKraken().getX(), gameData.getKraken().getY());
     }
 
     public AStar(GameData gameData, int scenario) {
@@ -1310,26 +1334,10 @@ class AStar extends SearchingAlgorithm {
     }
 
     /**
-     * Wraps A* run. Sets start and target, replaces game data,
-     * and then restores it after the run. Returns the best snapshot of this run.
-     *
-     * @param start  start point.
-     * @param target target point.
-     * @return best snapshot of this run.
+     * Performs an A* search run from the start to target.
      */
     @Override
-    public Snapshot partialRun(Point start, Point target) {
-        this.target = getNode(target).point;
-
-        if (start == target) {
-            takeSnapshot(new ArrayList<>());
-            var snapshotCopy = currentSnapshot;
-            currentSnapshot = null;
-
-            return snapshotCopy;
-        }
-
-        if (isLosing(start)) return null;
+    protected void partialRun() {
 
         steps.clear();
         closed.clear();
@@ -1342,8 +1350,6 @@ class AStar extends SearchingAlgorithm {
         for (; current != null && !current.point.equals(getNode(start).point); current = current.parent)
             steps.push(current.point);
 
-        gameData.setPath(start.getX(), start.getY());
-
         var stepsList = new ArrayList<>(steps);
         Collections.reverse(stepsList);
 
@@ -1353,20 +1359,10 @@ class AStar extends SearchingAlgorithm {
                         .noneMatch(p -> p.equals(stepsList.get(0)))
         ) {
             currentSnapshot = null;
-            return null;
+            return;
         }
 
-        while (!steps.isEmpty()) {
-            var p = steps.pop();
-            gameData.setPath(p.getX(), p.getY());
-        }
-
-        takeSnapshot(stepsList);
-
-        var snapshotCopy = currentSnapshot;
-        currentSnapshot = null;
-
-        return snapshotCopy;
+        takeSnapshot(stepsList, start);
     }
 }
 
@@ -1608,8 +1604,8 @@ class TestHelper {
      *     <li>Standard deviation of the execution times</li>
      * </ol>
      *
-     * @param winRate win rate.
-     * @param loseRate lose rate.
+     * @param winRate     win rate.
+     * @param loseRate    lose rate.
      * @param timeResults list of execution times.
      */
     private static void printStats(int winRate, int loseRate, List<Long> timeResults) {
